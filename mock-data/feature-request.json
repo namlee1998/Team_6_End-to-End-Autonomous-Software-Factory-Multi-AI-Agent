@@ -1,0 +1,19 @@
+{
+  "id": "FR-001",
+  "title": "Google Login",
+  "description": "Add Google OAuth 2.0 login to the task management app so users can sign in faster without creating a separate password. After successful Google login, user should be redirected to the main dashboard.",
+  "priority": "High",
+  "target_user": "End user (existing and new users of the task management app)",
+  "business_goal": "Reduce login friction and increase user retention by offering social login option",
+  "constraints": [
+    "Must not break existing email/password login flow",
+    "Must support login failure and network error states",
+    "Must redirect to dashboard after successful login",
+    "Must handle Google account not linked to existing app account",
+    "Mock data is allowed for Google OAuth token in demo"
+  ],
+  "created_by": "human_user",
+  "created_at": "2026-05-27T09:00:00Z",
+  "status": "INTAKE_REVIEW",
+  "workflow_run_id": "WR-001"
+}

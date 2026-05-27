@@ -1,0 +1,31 @@
+{
+  "project_id": "PRJ-001",
+  "project_name": "Task Management App",
+  "project_description": "A web-based task management application that allows users to create, assign, and track tasks within teams.",
+  "tech_stack": {
+    "frontend": "React 18 + TypeScript",
+    "backend": "FastAPI (Python 3.11)",
+    "database": "SQLite (MVP) / PostgreSQL (production)",
+    "auth": "JWT-based session management",
+    "styling": "Tailwind CSS"
+  },
+  "existing_features": [
+    "Email/password login and registration",
+    "Task dashboard (kanban board)",
+    "User profile management",
+    "Task creation, assignment, and status tracking",
+    "Team workspace"
+  ],
+  "constraints": [
+    "Do not break existing email/password login",
+    "Keep UI consistent with current design system",
+    "Mock data is allowed for Google OAuth in demo environment",
+    "No real OAuth client credentials required for demo"
+  ],
+  "current_version": "1.2.0",
+  "team": {
+    "frontend": "2 developers",
+    "backend": "1 developer",
+    "qa": "1 tester"
+  }
+}
