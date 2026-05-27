@@ -12,9 +12,6 @@ from typing import Any, TypedDict
 
 from langgraph.graph import END, StateGraph
 
-from src.agents.agent_1 import run_agent_1, stream_agent_1
-from src.agents.agent_2 import run_agent_2, stream_agent_2
-from src.agents.agent_3 import run_agent_3, stream_agent_3
 from src.agents.po_agent import run_po_agent, stream_po_agent
 from src.agents.intent_agent import run_intent_agent, stream_intent_agent
 from src.agents.ux_agent import run_ux_agent, stream_ux_agent
@@ -307,9 +304,6 @@ async def node_qa_agent(state: PipelineState) -> dict:
 def route_target(state: PipelineState) -> str:
     target = state.get("node_target", "")
     mapping = {
-        "agent_1_extraction": "agent_1",
-        "agent_2_scenarios": "agent_2",
-        "agent_3_automation": "agent_3",
         "intent_node": "intent_agent",
         "po_agent": "po_agent",
         "ux_agent": "ux_agent",
@@ -327,10 +321,6 @@ def build_graph():
     """Build and compile the unified LangGraph workflow."""
     workflow = StateGraph(PipelineState)
 
-    # Original testcase pipeline nodes
-    workflow.add_node("agent_1", node_agent_1_extraction)
-    workflow.add_node("agent_2", node_agent_2_scenarios)
-    workflow.add_node("agent_3", node_agent_3_automation)
     # AIDLC SDLC pipeline nodes
     workflow.add_node("intent_agent", node_intent_agent)
     workflow.add_node("po_agent", node_po_agent)
@@ -344,10 +334,7 @@ def build_graph():
     workflow.set_conditional_entry_point(
         route_target,
         path_map={
-            "agent_1": "agent_1",
-            "agent_2": "agent_2",
-            "agent_3": "agent_3",
-            "intent_agent": "intent_agent",
+                        "intent_agent": "intent_agent",
             "po_agent": "po_agent",
             "ux_agent": "ux_agent",
             "dev_agent": "dev_agent",
@@ -356,7 +343,7 @@ def build_graph():
         },
     )
 
-    for node in ["agent_1", "agent_2", "agent_3", "intent_agent", "po_agent", "ux_agent", "qa_agent", "error_node"]:
+    for node in ["intent_agent", "po_agent", "ux_agent", "qa_agent", "error_node"]:
         workflow.add_edge(node, END)
         
     workflow.add_edge("dev_agent", "sandbox_gate")
