@@ -1,0 +1,55 @@
+<mission>
+Extract UI context for each flow from the feature document.
+For each flow in the provided list, identify the specific UI evidence available in the document.
+</mission>
+
+<input>
+- A list of flow names already extracted from this feature
+- The feature document content (PRD, USER_FLOW, UI_DESCRIPTION sections)
+</input>
+
+<output_schema>
+Return a single JSON object mapping each flow name to its UI context.
+
+{
+  "Flow Name Exact": {
+    "active_screen": "Name of the screen where the user performs this flow",
+    "elements": ["visible UI element 1", "button label 2", "input field 3"],
+    "success_screen": "Screen the user lands on after successful completion",
+    "success_signals": ["observable UI change 1", "observable UI change 2"],
+    "validation_rules": [
+      { "field": "field name", "constraint": "rule description" }
+    ],
+    "error_signals": [
+      {
+        "trigger": "condition that causes the error",
+        "ui_text": "exact text shown on UI if document specifies it, otherwise null",
+        "element": "which UI element shows the error, if known"
+      }
+    ]
+  }
+}
+</output_schema>
+
+<rules>
+For every flow:
+- active_screen: derive from UI_DESCRIPTION section headers or flow context
+- elements: list only elements mentioned in UI_DESCRIPTION for that screen; do not invent
+- success_screen: derive from what the flow says happens after successful completion
+- success_signals: derive from PRD Output section or flow final steps
+- validation_rules: extract every field constraint from PRD Input section
+  (required, max/min length, accepted formats, numeric ranges, etc.)
+- error_signals: one entry per validation rule or error condition
+  - ui_text: set to the exact string if the document states it; otherwise null
+  - Do NOT invent error text; null is the correct value when unspecified
+
+If information for a field is not present in the document, use:
+- null for string fields
+- [] for list fields
+
+Every flow in the input list MUST have a corresponding key in the output object.
+</rules>
+
+<output_format>
+Return ONLY a valid JSON object. No markdown fences, no explanations.
+</output_format>

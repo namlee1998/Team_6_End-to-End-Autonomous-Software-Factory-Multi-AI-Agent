@@ -1,0 +1,30 @@
+const express = require('express');
+const SdlcController = require('../controllers/SdlcController');
+const quotaMiddleware = require('../middleware/quotaMiddleware');
+
+const router = express.Router();
+
+// ── IntentGate ─────────────────────────────────────────────────────────────
+router.post('/run-intent-agent', quotaMiddleware, SdlcController.runIntentAgent.bind(SdlcController));
+
+// ── Run Agents (quota checked) ────────────────────────────────────────────
+router.post('/run-po-agent',  quotaMiddleware, SdlcController.runPOAgent.bind(SdlcController));
+router.post('/run-ux-agent',  quotaMiddleware, SdlcController.runUXAgent.bind(SdlcController));
+router.post('/run-dev-agent', quotaMiddleware, SdlcController.runDEVAgent.bind(SdlcController));
+router.post('/run-qa-agent',  quotaMiddleware, SdlcController.runQAAgent.bind(SdlcController));
+
+// ── HITL Gate ────────────────────────────────────────────────────────────
+// POST /api/v1/sdlc/tasks/:task_id/gate-decision  { decision, comment }
+router.post('/tasks/:task_id/gate-decision', SdlcController.submitGateDecision.bind(SdlcController));
+
+// ── Task Status ──────────────────────────────────────────────────────────
+router.get('/tasks/:task_id',              SdlcController.getTaskStatus.bind(SdlcController));
+router.get('/status/:task_id',             SdlcController.streamStatus.bind(SdlcController));   // SSE
+
+// ── Workflow-level views ──────────────────────────────────────────────────
+// GET /api/v1/sdlc/workflow-status?project_id=xxx
+router.get('/workflow-status',                        SdlcController.getWorkflowStatus.bind(SdlcController));
+router.get('/final-review-packet/:project_id',        SdlcController.getFinalReviewPacket.bind(SdlcController));
+router.get('/audit-trail/:project_id',                SdlcController.getAuditTrail.bind(SdlcController));
+
+module.exports = router;
