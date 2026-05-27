@@ -1,0 +1,201 @@
+"""
+PO Agent — Generates PRD, User Stories, Acceptance Criteria, and Scope
+from a Feature Request + Project Context.
+"""
+from __future__ import annotations
+import json
+import logging
+import os
+import re
+from typing import Any
+from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_openai import ChatOpenAI
+from src.schemas.aidlc import POAgentInput, POAgentOutput, UserStory
+
+logger = logging.getLogger(__name__)
+
+SYSTEM_PROMPT = """You are a senior Product Owner with 10+ years of experience writing PRDs for software products.
+
+Given a Feature Request and Project Context, produce:
+
+1. **PRD** (prd) — A concise Product Requirements Document in markdown covering:
+   - Problem Statement
+   - Target User
+   - Goals & Non-Goals
+   - Key Requirements
+
+2. **User Stories** (user_stories) — Array of structured stories. Each must have:
+   - id: "US-001", "US-002", ...
+   - role, want, so_that
+   - acceptance_criteria: list of measurable, testable criteria
+
+3. **Acceptance Criteria** (acceptance_criteria) — Flat list of ALL acceptance criteria from all user stories. Each must be measurable and testable.
+
+4. **Scope** (scope) — Markdown list of what IS included in this feature.
+
+5. **Out of Scope** (out_of_scope) — Markdown list of what is EXCLUDED.
+
+Output ONLY valid JSON with keys: prd, user_stories, acceptance_criteria, scope, out_of_scope, summary.
+No extra text outside the JSON block.
+"""
+
+def _get_llm(model: str | None = None) -> ChatOpenAI:
+    model_name = model or os.getenv("DEFAULT_MODEL", "gpt-4o-mini")
+    return ChatOpenAI(
+        model=model_name,
+        temperature=0.2,
+        api_key=os.getenv("OPENAI_API_KEY", ""),
+        base_url=os.getenv("OPENAI_API_BASE") or None,
+    )
+
+def _parse_po_output(raw: str) -> dict:
+    """Extract JSON from LLM output, stripping markdown fences."""
+    text = raw.strip()
+    fence = re.search(r"```(?:json)?\s*([\s\S]*?)```", text)
+    if fence:
+        text = fence.group(1).strip()
+    try:
+        return json.loads(text)
+    except Exception:
+        # Best-effort: return minimal structure
+        logger.warning("[POAgent] Failed to parse JSON, returning raw as prd")
+        return {"prd": raw, "user_stories": [], "acceptance_criteria": [], "scope": "", "out_of_scope": "", "summary": ""}
+
+async def run_po_agent(
+    input_data: POAgentInput,
+    model: str | None = None,
+    trace_context: Any | None = None,
+) -> POAgentOutput:
+    llm = _get_llm(model)
+    fr = input_data.feature_request
+    pc = input_data.project_context
+
+    user_content = f"""Feature Request:
+- Title: {fr.title}
+- Description: {fr.description}
+- Priority: {fr.priority}
+- Target User: {fr.target_user}
+- Business Goal: {fr.business_goal}
+- Constraints: {json.dumps(fr.constraints)}
+
+Project Context:
+- Project: {pc.project_name}
+- Tech Stack: {json.dumps(pc.tech_stack)}
+- Existing Features: {json.dumps(pc.existing_features)}
+- Constraints: {json.dumps(pc.constraints)}
+"""
+    if input_data.feedback_prompt:
+        user_content = f"<human_feedback>\n{input_data.feedback_prompt}\n</human_feedback>\n\n{user_content}"
+
+    messages = [SystemMessage(content=SYSTEM_PROMPT), HumanMessage(content=user_content)]
+    config = trace_context.langchain_config("po_agent") if trace_context else None
+
+    response = await llm.ainvoke(messages, **({"config": config} if config else {}))
+    parsed = _parse_po_output(response.content)
+
+    # Map user_stories dicts → UserStory objects
+    stories = []
+    for s in parsed.get("user_stories", []):
+        if isinstance(s, dict):
+            stories.append(UserStory(
+                id=s.get("id", "US-001"),
+                role=s.get("role", ""),
+                want=s.get("want", ""),
+                so_that=s.get("so_that", ""),
+                acceptance_criteria=s.get("acceptance_criteria", []),
+            ))
+
+    return POAgentOutput(
+        prd=parsed.get("prd", ""),
+        user_stories=stories,
+        acceptance_criteria=parsed.get("acceptance_criteria", []),
+        scope=parsed.get("scope", ""),
+        out_of_scope=parsed.get("out_of_scope", ""),
+        summary=parsed.get("summary", f"PO Agent completed for: {fr.title}"),
+    )
+
+async def stream_po_agent(
+    input_data: POAgentInput,
+    model: str | None = None,
+    trace_context: Any | None = None,
+):
+    """Stream PO Agent token by token, yield progress + completed events."""
+    llm = _get_llm(model)
+    fr = input_data.feature_request
+    pc = input_data.project_context
+
+    user_content = f"""Feature Request:
+- Title: {fr.title}
+- Description: {fr.description}
+- Priority: {fr.priority}
+- Target User: {fr.target_user}
+- Business Goal: {fr.business_goal}
+- Constraints: {json.dumps(fr.constraints)}
+
+Project Context:
+- Project: {pc.project_name}
+- Tech Stack: {json.dumps(pc.tech_stack)}
+- Existing Features: {json.dumps(pc.existing_features)}
+"""
+    if input_data.feedback_prompt:
+        user_content = f"<human_feedback>\n{input_data.feedback_prompt}\n</human_feedback>\n\n{user_content}"
+
+    messages = [SystemMessage(content=SYSTEM_PROMPT), HumanMessage(content=user_content)]
+    config = trace_context.langchain_config("po_agent") if trace_context else None
+
+    max_retries = 3
+    retries = 0
+    parsed = None
+    
+    while retries < max_retries:
+        full_text = ""
+        total_input = 0
+        total_output = 0
+        
+        if retries > 0:
+            yield {"event": "progress", "data": {"step": "schema_gate", "token": f"\n\n🔄 Schema validation failed. Retrying JSON generation (Attempt {retries}/{max_retries})...\n\n"}}
+
+        if hasattr(llm, "astream_events"):
+            async for event in llm.astream_events(messages, version="v2", **({"config": config} if config else {})):
+                kind = event["event"]
+                if kind == "on_chat_model_stream":
+                    chunk = event["data"]["chunk"]
+                    if chunk.content:
+                        full_text += chunk.content
+                        yield {"event": "progress", "data": {"step": "po_agent", "token": chunk.content}}
+                elif kind == "on_chat_model_end":
+                    usage = getattr(event["data"].get("output"), "usage_metadata", None)
+                    if usage:
+                        total_input += usage.get("input_tokens", 0)
+                        total_output += usage.get("output_tokens", 0)
+        else:
+            stream = llm.astream(messages)
+            async for chunk in stream:
+                if chunk.content:
+                    full_text += chunk.content
+                    yield {"event": "progress", "data": {"step": "po_agent", "token": chunk.content}}
+
+        # Try to parse strict JSON
+        text = full_text.strip()
+        fence = re.search(r"```(?:json)?\s*([\s\S]*?)```", text)
+        if fence: text = fence.group(1).strip()
+        
+        try:
+            parsed = json.loads(text)
+            break # Success!
+        except json.JSONDecodeError as e:
+            retries += 1
+            if retries == max_retries:
+                # Fallback to robust parsing
+                parsed = _parse_po_output(full_text)
+                break
+            else:
+                messages.append(SystemMessage(content=f"Your last output was invalid JSON. Error: {str(e)}. Please output ONLY valid JSON."))
+
+    yield {
+        "event": "completed",
+        "data": {
+            **parsed,
+            "token_usage": {"input": total_input, "output": total_output},
+        },
+    }
