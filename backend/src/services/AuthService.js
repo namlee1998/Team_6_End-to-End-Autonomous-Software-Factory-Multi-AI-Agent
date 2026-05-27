@@ -56,13 +56,6 @@ class AuthService {
       throw new ApiError(400, 'Email and password are required');
     }
 
-    if (email === 'admin@vfs.com' && password === 'admin123') {
-      return {
-        session: { access_token: 'mock-admin-token', refresh_token: 'mock-refresh' },
-        user: { id: '00000000-0000-0000-0000-000000000000', email: 'admin@vfs.com' },
-      };
-    }
-
     const { data, error } = await authClient.auth.signInWithPassword({
       email,
       password,
@@ -102,10 +95,6 @@ class AuthService {
   async getCurrentUser(accessToken) {
     if (!accessToken) {
       throw new ApiError(401, 'Missing access token');
-    }
-
-    if (accessToken === 'mock-admin-token') {
-      return { id: '00000000-0000-0000-0000-000000000000', email: 'admin@vfs.com' };
     }
 
     const { data: { user }, error } = await authClient.auth.getUser(accessToken);

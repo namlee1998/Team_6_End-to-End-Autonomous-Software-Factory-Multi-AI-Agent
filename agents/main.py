@@ -17,9 +17,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 
-from src.agents.agent_1 import run_agent_1, stream_agent_1
-from src.agents.agent_2 import run_agent_2, stream_agent_2
-from src.agents.agent_3 import run_agent_3, stream_agent_3
 from src.schemas import (
     Agent1Input,
     Agent2Input,
@@ -79,51 +76,7 @@ app.add_middleware(
 
 def _parse_agent_input(node_target: str, context: dict):
     """Parse context dict into the correct agent input schema."""
-    if node_target == "agent_1_extraction":
-        return Agent1Input(
-            raw_text=context.get("raw_text", ""),
-            prompt_profile=context.get("prompt_profile", ""),
-            feedback_prompt=context.get("feedback_prompt", ""),
-        )
-    elif node_target == "agent_2_scenarios":
-        from src.schemas import UXFlow
-
-        raw_text = context.get("normalized_flows", "") or context.get(
-            "normalized_flows_text", ""
-        )
-        fp = context.get("feedback_prompt", "")
-        import logging
-
-        logging.getLogger(__name__).info(
-            f"[main.parse_input] agent_2 feedback_prompt={repr(fp)}"
-        )
-        return Agent2Input(
-            feature_name=context.get("feature_name", "Unknown"),
-            flows=[
-                UXFlow(**f) if isinstance(f, dict) else f
-                for f in context.get("flows", [])
-            ],
-            normalized_flows_text=raw_text,
-            feedback_prompt=fp,
-        )
-    elif node_target == "agent_3_automation":
-        from src.schemas import TestScenario
-
-        raw_text = context.get("test_scenarios", "") or context.get(
-            "test_scenarios_text", ""
-        )
-        return Agent3Input(
-            feature_name=context.get("feature_name", "Unknown"),
-            scenarios=[
-                TestScenario(**s) if isinstance(s, dict) else s
-                for s in context.get("scenarios", [])
-            ],
-            test_scenarios_text=raw_text,
-            ui_description=context.get("ui_description", ""),
-            framework=context.get("framework", "Mobile Auto Platform"),
-            feedback_prompt=context.get("feedback_prompt", ""),
-        )
-    elif node_target == "intent_node":
+    if node_target == "intent_node":
         fr_data = context.get("feature_request", {})
         fr = FeatureRequest(**fr_data) if isinstance(fr_data, dict) else fr_data
         return IntentAgentInput(
@@ -142,13 +95,7 @@ async def _run_agent(node_target: str, input_data, trace_context=None):
     context_text = json.dumps(input_data.model_dump(), default=str)
     model_config = get_agent_config(node_target, context_text)
 
-    if node_target == "agent_1_extraction":
-        return await run_agent_1(input_data, trace_context=trace_context)
-    elif node_target == "agent_2_scenarios":
-        return await run_agent_2(input_data, trace_context=trace_context)
-    elif node_target == "agent_3_automation":
-        return await run_agent_3(input_data, trace_context=trace_context)
-    elif node_target == "intent_node":
+    if node_target == "intent_node":
         return await run_intent_agent(
             input_data, model_config=model_config, trace_context=trace_context
         )
@@ -166,16 +113,7 @@ async def _stream_agent(
     context_text = json.dumps(input_data.model_dump(), default=str)
     model_config = get_agent_config(node_target, context_text)
 
-    if node_target == "agent_1_extraction":
-        async for chunk in stream_agent_1(input_data, trace_context=trace_context):
-            yield chunk
-    elif node_target == "agent_2_scenarios":
-        async for chunk in stream_agent_2(input_data, trace_context=trace_context):
-            yield chunk
-    elif node_target == "agent_3_automation":
-        async for chunk in stream_agent_3(input_data, trace_context=trace_context):
-            yield chunk
-    elif node_target == "intent_node":
+    if node_target == "intent_node":
         async for chunk in stream_intent_agent(
             input_data, model_config=model_config, trace_context=trace_context
         ):

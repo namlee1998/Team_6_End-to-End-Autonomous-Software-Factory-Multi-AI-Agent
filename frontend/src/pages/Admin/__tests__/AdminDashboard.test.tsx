@@ -1,10 +1,11 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AdminDashboard } from '../AdminDashboard';
-import { getAdminStats } from '@/services/adminApi';
+import { getAdminStats, getAdminFunnel } from '@/services/adminApi';
 
 vi.mock('@/services/adminApi', () => ({
   getAdminStats: vi.fn(),
+  getAdminFunnel: vi.fn(),
 }));
 
 const stats = {
@@ -43,7 +44,7 @@ const stats = {
       agent_1: {
         agentType: 'agent_1',
         label: 'Agent 1',
-        avg: 1200,
+        avg: 900,
         p95: 2000,
         max: 2500,
         sampleCount: 3,
@@ -63,6 +64,15 @@ describe('AdminDashboard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(getAdminStats).mockResolvedValue(stats as never);
+    vi.mocked(getAdminFunnel).mockResolvedValue({
+      steps: [
+        { agent: 'intent', label: 'Intent', count: 100, rate: 100 },
+        { agent: 'po', label: 'PO', count: 80, rate: 80 },
+        { agent: 'ux', label: 'UX', count: 60, rate: 75 },
+        { agent: 'dev', label: 'DEV', count: 30, rate: 50 }
+      ],
+      overall_rate: 30
+    } as never);
   });
 
   it('renders snapshot cards, live agent health, and empty states', async () => {
@@ -79,7 +89,7 @@ describe('AdminDashboard', () => {
     expect(screen.getByText('12')).toBeInTheDocument();
     expect(screen.getByText('Agent 1')).toBeInTheDocument();
     expect(screen.getByText('90%')).toBeInTheDocument();
-    expect(screen.getByText('1,200 ms')).toBeInTheDocument();
+    expect(screen.getByText('900 ms')).toBeInTheDocument();
     expect(screen.getByText('No failed agent runs in this window')).toBeInTheDocument();
     expect(screen.getByText('No traced agent runs in this window')).toBeInTheDocument();
   });
