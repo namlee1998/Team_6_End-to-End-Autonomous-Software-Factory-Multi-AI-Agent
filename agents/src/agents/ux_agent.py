@@ -61,7 +61,7 @@ async def run_ux_agent(
     model: str | None = None,
     trace_context: Any | None = None,
 ) -> UXAgentOutput:
-    llm = _get_llm(model)
+    llm = _get_llm(model_config)
 
     user_content = f"""PRD:\n{input_data.prd}\n\n"""
     if input_data.user_stories:
@@ -93,7 +93,7 @@ async def stream_ux_agent(
     model: str | None = None,
     trace_context: Any | None = None,
 ):
-    llm = _get_llm(model)
+    llm = _get_llm(model_config)
     user_content = f"PRD:\n{input_data.prd}\n\n"
     if input_data.user_stories:
         stories_text = "\n".join([f"- [{s.id}] As a {s.role}, I want {s.want}" for s in input_data.user_stories])

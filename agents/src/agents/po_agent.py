@@ -66,7 +66,7 @@ async def run_po_agent(
     model: str | None = None,
     trace_context: Any | None = None,
 ) -> POAgentOutput:
-    llm = _get_llm(model)
+    llm = _get_llm(model_config)
     fr = input_data.feature_request
     pc = input_data.project_context
 
@@ -120,7 +120,7 @@ async def stream_po_agent(
     trace_context: Any | None = None,
 ):
     """Stream PO Agent token by token, yield progress + completed events."""
-    llm = _get_llm(model)
+    llm = _get_llm(model_config)
     fr = input_data.feature_request
     pc = input_data.project_context
 

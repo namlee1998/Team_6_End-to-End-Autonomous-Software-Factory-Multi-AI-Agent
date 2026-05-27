@@ -21,9 +21,27 @@ Given PRD, AC list, UX Spec, Implementation Plan, Code Diff and Risk Assessment,
 5. release_recommendation — "PASS" | "HOLD" | "REWORK"
 Output ONLY valid JSON: {test_cases, qa_report, ac_coverage_matrix, pass_count, fail_count, blocker_count, release_recommendation, summary}"""
 
-def _get_llm(model=None):
-    return ChatOpenAI(model=model or os.getenv("DEFAULT_MODEL","gpt-4o-mini"), temperature=0.1,
-                      api_key=os.getenv("OPENAI_API_KEY",""), base_url=os.getenv("OPENAI_API_BASE") or None)
+def _get_llm(model_config=None):
+    if model_config is None:
+        model_config = {}
+        
+    model_name = model_config.get("model") or os.getenv("DEFAULT_MODEL", "gpt-4o-mini")
+    temp = model_config.get("temperature", 0.1)
+    max_tokens = model_config.get("max_tokens", 8192)
+    thinking = model_config.get("thinking", False)
+    
+    kwargs = {
+        "model": model_name,
+        "temperature": temp,
+        "max_tokens": max_tokens,
+        "api_key": os.getenv("OPENAI_API_KEY", ""),
+        "base_url": os.getenv("OPENAI_API_BASE") or None
+    }
+    
+    if thinking:
+        kwargs["model_kwargs"] = {"extra_body": {"thinking": True}}
+        
+    return ChatOpenAI(**kwargs)
 
 def _parse(raw):
     text = raw.strip()
@@ -33,8 +51,8 @@ def _parse(raw):
     except: return {"test_cases":[], "qa_report": raw, "ac_coverage_matrix":[], "pass_count":0,
                     "fail_count":0, "blocker_count":0, "release_recommendation":"HOLD", "summary":""}
 
-async def run_qa_agent(input_data: QAAgentInput, model=None, trace_context=None) -> QAAgentOutput:
-    llm = _get_llm(model)
+async def run_qa_agent(input_data: QAAgentInput, model_config=None, trace_context=None) -> QAAgentOutput:
+    llm = _get_llm(model_config)
     content = ""
     if input_data.acceptance_criteria:
         content += "Acceptance Criteria:\n" + "\n".join(f"- {a}" for a in input_data.acceptance_criteria) + "\n\n"
@@ -56,8 +74,8 @@ async def run_qa_agent(input_data: QAAgentInput, model=None, trace_context=None)
                          release_recommendation=p.get("release_recommendation","HOLD"),
                          summary=p.get("summary","QA Agent completed"))
 
-async def stream_qa_agent(input_data: QAAgentInput, model=None, trace_context=None):
-    llm = _get_llm(model)
+async def stream_qa_agent(input_data: QAAgentInput, model_config=None, trace_context=None):
+    llm = _get_llm(model_config)
     content = ""
     if input_data.acceptance_criteria:
         content += "AC:\n" + "\n".join(f"- {a}" for a in input_data.acceptance_criteria) + "\n\n"

@@ -136,12 +136,12 @@ def _parse_agent_input(node_target: str, context: dict):
 
 async def _run_agent(node_target: str, input_data, trace_context=None):
     """Run the appropriate agent with the parsed input. Returns markdown string."""
-    from src.utils.router import route_model_by_tokens
+    from src.utils.router import get_agent_config
     import json
-    
+
     context_text = json.dumps(input_data.model_dump(), default=str)
-    model = route_model_by_tokens(context_text)
-    
+    model_config = get_agent_config(node_target, context_text)
+
     if node_target == "agent_1_extraction":
         return await run_agent_1(input_data, trace_context=trace_context)
     elif node_target == "agent_2_scenarios":
@@ -149,7 +149,9 @@ async def _run_agent(node_target: str, input_data, trace_context=None):
     elif node_target == "agent_3_automation":
         return await run_agent_3(input_data, trace_context=trace_context)
     elif node_target == "intent_node":
-        return await run_intent_agent(input_data, model=model, trace_context=trace_context)
+        return await run_intent_agent(
+            input_data, model_config=model_config, trace_context=trace_context
+        )
     else:
         raise ValueError(f"Unknown node_target: {node_target}")
 
@@ -158,12 +160,12 @@ async def _stream_agent(
     node_target: str, input_data, trace_context=None
 ) -> AsyncGenerator[dict, None]:
     """Stream the appropriate agent with the parsed input."""
-    from src.utils.router import route_model_by_tokens
+    from src.utils.router import get_agent_config
     import json
-    
+
     context_text = json.dumps(input_data.model_dump(), default=str)
-    model = route_model_by_tokens(context_text)
-    
+    model_config = get_agent_config(node_target, context_text)
+
     if node_target == "agent_1_extraction":
         async for chunk in stream_agent_1(input_data, trace_context=trace_context):
             yield chunk
@@ -174,23 +176,37 @@ async def _stream_agent(
         async for chunk in stream_agent_3(input_data, trace_context=trace_context):
             yield chunk
     elif node_target == "intent_node":
-        async for chunk in stream_intent_agent(input_data, model=model, trace_context=trace_context):
+        async for chunk in stream_intent_agent(
+            input_data, model_config=model_config, trace_context=trace_context
+        ):
             yield chunk
     elif node_target == "po_agent":
         from src.agents.po_agent import stream_po_agent
-        async for chunk in stream_po_agent(input_data, model=model, trace_context=trace_context):
+
+        async for chunk in stream_po_agent(
+            input_data, model_config=model_config, trace_context=trace_context
+        ):
             yield chunk
     elif node_target == "ux_agent":
         from src.agents.ux_agent import stream_ux_agent
-        async for chunk in stream_ux_agent(input_data, model=model, trace_context=trace_context):
+
+        async for chunk in stream_ux_agent(
+            input_data, model_config=model_config, trace_context=trace_context
+        ):
             yield chunk
     elif node_target == "dev_agent":
         from src.agents.dev_agent import stream_dev_agent
-        async for chunk in stream_dev_agent(input_data, model=model, trace_context=trace_context):
+
+        async for chunk in stream_dev_agent(
+            input_data, model_config=model_config, trace_context=trace_context
+        ):
             yield chunk
     elif node_target == "qa_agent":
         from src.agents.qa_agent import stream_qa_agent
-        async for chunk in stream_qa_agent(input_data, model=model, trace_context=trace_context):
+
+        async for chunk in stream_qa_agent(
+            input_data, model_config=model_config, trace_context=trace_context
+        ):
             yield chunk
     else:
         yield {
@@ -304,6 +320,7 @@ async def run_agent_sync(request: RunAgentRequest):
         raise HTTPException(status_code=500, detail=f"Agent execution failed: {str(e)}")
     finally:
         flush_observability()
+
 
 @app.get("/v1/agent/stream/{session_id}")
 async def stream_agent_ws(session_id: str):

@@ -53,7 +53,7 @@ async def run_intent_agent(
     model: str | None = None,
     trace_context: Any | None = None,
 ) -> IntentAgentOutput:
-    llm = _get_llm(model)
+    llm = _get_llm(model_config)
     fr = input_data.feature_request
 
     user_content = f"""Raw Feature Request:
@@ -84,7 +84,7 @@ async def stream_intent_agent(
     model: str | None = None,
     trace_context: Any | None = None,
 ):
-    llm = _get_llm(model)
+    llm = _get_llm(model_config)
     fr = input_data.feature_request
 
     user_content = f"""Raw Feature Request:

@@ -25,9 +25,27 @@ new code
 6. risk_level — "LOW" | "MEDIUM" | "HIGH". Rule: auth/DB/security/payment → HIGH
 Output ONLY valid JSON: {architecture_ledger_update, implementation_plan, mock_code_diff, changed_files, risk_assessment, risk_level, summary}"""
 
-def _get_llm(model=None):
-    return ChatOpenAI(model=model or os.getenv("DEFAULT_MODEL","gpt-4o-mini"), temperature=0.1,
-                      api_key=os.getenv("OPENAI_API_KEY",""), base_url=os.getenv("OPENAI_API_BASE") or None)
+def _get_llm(model_config=None):
+    if model_config is None:
+        model_config = {}
+        
+    model_name = model_config.get("model") or os.getenv("DEFAULT_MODEL", "gpt-4o-mini")
+    temp = model_config.get("temperature", 0.1)
+    max_tokens = model_config.get("max_tokens", 8192)
+    thinking = model_config.get("thinking", False)
+    
+    kwargs = {
+        "model": model_name,
+        "temperature": temp,
+        "max_tokens": max_tokens,
+        "api_key": os.getenv("OPENAI_API_KEY", ""),
+        "base_url": os.getenv("OPENAI_API_BASE") or None
+    }
+    
+    if thinking:
+        kwargs["model_kwargs"] = {"extra_body": {"thinking": True}}
+        
+    return ChatOpenAI(**kwargs)
 
 def _parse(raw):
     text = raw.strip()
@@ -36,8 +54,8 @@ def _parse(raw):
     try: return json.loads(text)
     except: return {"architecture_ledger_update": "", "implementation_plan": raw, "mock_code_diff": "", "changed_files": [], "risk_assessment": "", "risk_level": "MEDIUM", "summary": ""}
 
-async def run_dev_agent(input_data: DEVAgentInput, model=None, trace_context=None) -> DEVAgentOutput:
-    llm = _get_llm(model)
+async def run_dev_agent(input_data: DEVAgentInput, model_config=None, trace_context=None) -> DEVAgentOutput:
+    llm = _get_llm(model_config)
     pc = input_data.project_context
     content = f"PRD:\n{input_data.prd}\n\nUX Spec:\n{input_data.ux_spec}\n\nUser Flow:\n{input_data.user_flow}\n\n"
     if input_data.acceptance_criteria:
@@ -58,10 +76,10 @@ async def run_dev_agent(input_data: DEVAgentInput, model=None, trace_context=Non
                           risk_assessment=p.get("risk_assessment",""), risk_level=p.get("risk_level","LOW"),
                           summary=p.get("summary","DEV Agent completed"))
 
-async def stream_dev_agent(input_data: DEVAgentInput, model=None, trace_context=None):
+async def stream_dev_agent(input_data: DEVAgentInput, model_config=None, trace_context=None):
     from src.tools.sandbox import run_sandbox_test
     
-    llm = _get_llm(model)
+    llm = _get_llm(model_config)
     cfg = trace_context.langchain_config("dev_agent") if trace_context else None
 
     # Base content
