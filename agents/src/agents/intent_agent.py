@@ -28,7 +28,7 @@ Output ONLY valid JSON with keys: intent_assumptions, clarifying_questions, summ
 No extra text outside the JSON block.
 """
 
-def _get_llm(model: str | None = None) -> ChatOpenAI:
+def _get_llm(model_config: dict | None = None) -> ChatOpenAI:
     model_name = model or os.getenv("DEFAULT_MODEL", "gpt-4o-mini")
     return ChatOpenAI(
         model=model_name,
@@ -50,7 +50,7 @@ def _parse_intent_output(raw: str) -> dict:
 
 async def run_intent_agent(
     input_data: IntentAgentInput,
-    model: str | None = None,
+    model_config: dict | None = None,
     trace_context: Any | None = None,
 ) -> IntentAgentOutput:
     llm = _get_llm(model_config)
@@ -81,7 +81,7 @@ async def run_intent_agent(
 
 async def stream_intent_agent(
     input_data: IntentAgentInput,
-    model: str | None = None,
+    model_config: dict | None = None,
     trace_context: Any | None = None,
 ):
     llm = _get_llm(model_config)

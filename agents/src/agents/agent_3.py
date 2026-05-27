@@ -54,9 +54,9 @@ def _parse_json(text: str) -> dict:
     raise ValueError(f"No JSON object found in LLM response. Preview: {text[:200]}")
 
 
-def _get_llm(model: str | None = None) -> ChatOpenAI:
+def _get_llm(model_config: dict | None = None) -> ChatOpenAI:
     """Create the LLM instance."""
-    model_name = model or os.getenv("DEFAULT_MODEL", "kr/claude-sonnet-4.5")
+    model_name = (model_config or {}).get("model") or os.getenv("DEFAULT_MODEL", "kr/claude-sonnet-4.5")
     api_base = os.getenv("OPENAI_API_BASE")
     return ChatOpenAI(
         model=model_name,
@@ -68,7 +68,7 @@ def _get_llm(model: str | None = None) -> ChatOpenAI:
 
 async def run_agent_3(
     input_data: Agent3Input,
-    model: str | None = None,
+    model_config: dict | None = None,
     trace_context: Any | None = None,
 ) -> Agent3Output:
     """
@@ -129,7 +129,7 @@ async def run_agent_3(
 
 async def stream_agent_3(
     input_data: Agent3Input,
-    model: str | None = None,
+    model_config: dict | None = None,
     trace_context: Any | None = None,
 ) -> AsyncGenerator[dict[str, Any], None]:
     """

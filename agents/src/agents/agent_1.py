@@ -86,9 +86,9 @@ def _build_prompt_for_feature(
     )
 
 
-def _get_llm(model: str | None = None) -> ChatOpenAI:
+def _get_llm(model_config: dict | None = None) -> ChatOpenAI:
     """Create the LLM instance."""
-    model_name = model or os.getenv("DEFAULT_MODEL", "kr/claude-sonnet-4.5")
+    model_name = (model_config or {}).get("model") or os.getenv("DEFAULT_MODEL", "kr/claude-sonnet-4.5")
     api_base = os.getenv("OPENAI_API_BASE") or None  # treat empty string as unset
     return ChatOpenAI(
         model=model_name,
@@ -180,7 +180,7 @@ async def _enrich_flows_with_ui_context(
 
 
 async def run_agent_1(
-    input_data: Agent1Input, model: str | None = None, trace_context: Any | None = None
+    input_data: Agent1Input, model_config: dict | None = None, trace_context: Any | None = None
 ) -> Agent1Output:
     """
     Run Agent 1: Extract UX flows from document text.
@@ -230,7 +230,7 @@ async def run_agent_1(
 
 async def stream_agent_1(
     input_data: Agent1Input,
-    model: str | None = None,
+    model_config: dict | None = None,
     trace_context: Any | None = None,
 ) -> Any:
     """

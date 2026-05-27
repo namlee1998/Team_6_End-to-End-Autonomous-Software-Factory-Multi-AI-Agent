@@ -36,7 +36,7 @@ Output ONLY valid JSON with keys: ux_spec, user_flow, wireframe_spec, component_
 No extra text outside the JSON.
 """
 
-def _get_llm(model: str | None = None) -> ChatOpenAI:
+def _get_llm(model_config: dict | None = None) -> ChatOpenAI:
     model_name = model or os.getenv("DEFAULT_MODEL", "gpt-4o-mini")
     return ChatOpenAI(
         model=model_name,
@@ -58,7 +58,7 @@ def _parse_output(raw: str) -> dict:
 
 async def run_ux_agent(
     input_data: UXAgentInput,
-    model: str | None = None,
+    model_config: dict | None = None,
     trace_context: Any | None = None,
 ) -> UXAgentOutput:
     llm = _get_llm(model_config)
@@ -90,7 +90,7 @@ async def run_ux_agent(
 
 async def stream_ux_agent(
     input_data: UXAgentInput,
-    model: str | None = None,
+    model_config: dict | None = None,
     trace_context: Any | None = None,
 ):
     llm = _get_llm(model_config)

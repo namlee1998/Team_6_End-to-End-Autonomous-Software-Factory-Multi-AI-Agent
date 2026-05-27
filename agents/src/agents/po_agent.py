@@ -39,7 +39,7 @@ Output ONLY valid JSON with keys: prd, user_stories, acceptance_criteria, scope,
 No extra text outside the JSON block.
 """
 
-def _get_llm(model: str | None = None) -> ChatOpenAI:
+def _get_llm(model_config: dict | None = None) -> ChatOpenAI:
     model_name = model or os.getenv("DEFAULT_MODEL", "gpt-4o-mini")
     return ChatOpenAI(
         model=model_name,
@@ -63,7 +63,7 @@ def _parse_po_output(raw: str) -> dict:
 
 async def run_po_agent(
     input_data: POAgentInput,
-    model: str | None = None,
+    model_config: dict | None = None,
     trace_context: Any | None = None,
 ) -> POAgentOutput:
     llm = _get_llm(model_config)
@@ -116,7 +116,7 @@ Project Context:
 
 async def stream_po_agent(
     input_data: POAgentInput,
-    model: str | None = None,
+    model_config: dict | None = None,
     trace_context: Any | None = None,
 ):
     """Stream PO Agent token by token, yield progress + completed events."""
