@@ -1,0 +1,124 @@
+{
+  "artifact_id": "ART-DEV-002",
+  "workflow_run_id": "WR-001",
+  "generated_by": "DEV Agent",
+  "changed_files": [
+    {
+      "file": "backend/migrations/add_google_auth_columns.sql",
+      "action": "CREATE",
+      "type": "migration",
+      "reason": "Add google_id and google_email columns to users table for Google OAuth linking",
+      "ac_mapping": ["AC-007"],
+      "risk": "LOW"
+    },
+    {
+      "file": "backend/services/google_auth_service.py",
+      "action": "CREATE",
+      "type": "service",
+      "reason": "New service to handle Google token verification and user lookup/creation",
+      "ac_mapping": ["AC-003", "AC-004"],
+      "risk": "HIGH",
+      "risk_reason": "Touches authentication flow — must mock carefully for demo"
+    },
+    {
+      "file": "backend/routers/auth.py",
+      "action": "MODIFY",
+      "type": "router",
+      "reason": "Add 3 new endpoints: POST /auth/google, POST /auth/google/link, DELETE /auth/google/unlink",
+      "ac_mapping": ["AC-003", "AC-004", "AC-006", "AC-007"],
+      "risk": "HIGH",
+      "risk_reason": "Modifying auth router — existing endpoints must remain unchanged"
+    },
+    {
+      "file": "backend/models/user.py",
+      "action": "MODIFY",
+      "type": "model",
+      "reason": "Add google_id and google_email fields to User model",
+      "ac_mapping": ["AC-007"],
+      "risk": "MEDIUM",
+      "risk_reason": "Database model change requires migration"
+    },
+    {
+      "file": "src/components/auth/GoogleLoginButton.tsx",
+      "action": "CREATE",
+      "type": "component",
+      "reason": "New component for Google login button with loading/idle/disabled states",
+      "ac_mapping": ["AC-001", "AC-002"],
+      "risk": "LOW"
+    },
+    {
+      "file": "src/components/auth/LoginErrorBanner.tsx",
+      "action": "CREATE",
+      "type": "component",
+      "reason": "Error banner component for login failure messages",
+      "ac_mapping": ["AC-004"],
+      "risk": "LOW"
+    },
+    {
+      "file": "src/components/profile/LinkedAccountsSection.tsx",
+      "action": "CREATE",
+      "type": "component",
+      "reason": "Profile section to manage linked Google account (link/unlink)",
+      "ac_mapping": ["AC-006", "AC-007"],
+      "risk": "LOW"
+    },
+    {
+      "file": "src/hooks/useGoogleLogin.ts",
+      "action": "CREATE",
+      "type": "hook",
+      "reason": "Custom hook to handle Google OAuth flow, loading state, error handling",
+      "ac_mapping": ["AC-002", "AC-003", "AC-004", "AC-005", "AC-009"],
+      "risk": "MEDIUM",
+      "risk_reason": "Manages OAuth state — needs careful error boundary handling"
+    },
+    {
+      "file": "src/hooks/useLinkedAccounts.ts",
+      "action": "CREATE",
+      "type": "hook",
+      "reason": "Hook to fetch and manage linked accounts state for Profile page",
+      "ac_mapping": ["AC-006", "AC-007"],
+      "risk": "LOW"
+    },
+    {
+      "file": "src/pages/LoginPage.tsx",
+      "action": "MODIFY",
+      "type": "page",
+      "reason": "Add GoogleLoginButton, LoginErrorBanner, and 'or' separator. Existing form untouched.",
+      "ac_mapping": ["AC-001", "AC-008"],
+      "risk": "MEDIUM",
+      "risk_reason": "Modifying existing page — must not break existing email login flow"
+    },
+    {
+      "file": "src/pages/ProfileSettingsPage.tsx",
+      "action": "MODIFY",
+      "type": "page",
+      "reason": "Add LinkedAccountsSection to Profile Settings. Existing sections untouched.",
+      "ac_mapping": ["AC-006", "AC-007"],
+      "risk": "LOW"
+    },
+    {
+      "file": "tests/test_google_auth.py",
+      "action": "CREATE",
+      "type": "test",
+      "reason": "Backend unit tests for Google auth service and endpoints",
+      "ac_mapping": ["AC-003", "AC-004", "AC-006", "AC-007", "AC-008"],
+      "risk": "LOW"
+    },
+    {
+      "file": "src/__tests__/GoogleLogin.test.tsx",
+      "action": "CREATE",
+      "type": "test",
+      "reason": "Frontend component and integration tests for Google login flow",
+      "ac_mapping": ["AC-001", "AC-002", "AC-005", "AC-009"],
+      "risk": "LOW"
+    }
+  ],
+  "summary": {
+    "total_files": 13,
+    "new_files": 8,
+    "modified_files": 5,
+    "high_risk_files": 2,
+    "medium_risk_files": 3,
+    "low_risk_files": 8
+  }
+}
