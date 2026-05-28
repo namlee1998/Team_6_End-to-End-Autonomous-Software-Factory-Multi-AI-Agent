@@ -216,7 +216,7 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-s
 .sc-wait{color:#fbbf24;border-color:rgba(245,158,11,.35);background:rgba(245,158,11,.09);animation:chip-pulse 1.5s infinite}
 .sc-risk{color:#f87171;border-color:rgba(239,68,68,.4);background:rgba(239,68,68,.09);animation:chip-pulse 1s infinite}
 .sc-done{color:#34d399;border-color:rgba(16,185,129,.35);background:rgba(16,185,129,.09)}
-.sc-hold{color:#94a3b8;border-color:rgba(148,163,184,.25);background:rgba(148,163,184,.07)}
+.sc-reject{color:#f87171;border-color:rgba(239,68,68,.35);background:rgba(239,68,68,.09)}
 @keyframes chip-pulse{0%,100%{opacity:1}50%{opacity:.65}}
 
 .btn-start{
@@ -279,6 +279,19 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-s
 }
 .g-qa-bugs{padding:4px 16px 9px;background:rgba(249,115,22,.04);display:flex;flex-direction:column;gap:5px}
 .bug-row{display:flex;align-items:center;gap:8px;font-size:11px}
+.hitl-output-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:8px}
+.hitl-output-card{
+  border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.035);
+  border-radius:8px;padding:8px;min-width:0;
+}
+.hitl-output-title{font-size:11px;font-weight:800;color:#e2e8f0;margin-bottom:6px}
+.hitl-output-links{display:flex;flex-wrap:wrap;gap:5px}
+.hitl-output-link{
+  border:1px solid rgba(99,102,241,.26);background:rgba(99,102,241,.1);color:#c7d2fe;
+  border-radius:6px;padding:4px 7px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;
+}
+.hitl-output-link:hover{background:rgba(99,102,241,.18);border-color:rgba(99,102,241,.42)}
+@media (max-width:900px){.hitl-output-grid{grid-template-columns:1fr}}
 .g-qa-acts{
   padding:8px 16px;border-top:1px solid rgba(249,115,22,.2);
   background:rgba(249,115,22,.05);display:flex;gap:7px;flex-wrap:wrap;align-items:center;
@@ -305,7 +318,6 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-s
 .gbn-reject{background:#ef4444;color:#fff}.gbn-reject:hover{background:#dc2626}
 .gbn-changes{background:#f59e0b;color:#000}.gbn-changes:hover{background:#d97706}
 .gbn-release{background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff}
-.gbn-hold{background:rgba(255,255,255,.07);color:#94a3b8;border:1px solid rgba(255,255,255,.12)}
 .gbn-senddev{background:#c2410c;color:#fff}.gbn-senddev:hover{background:#9a3412}
 .gbn-reqa{background:rgba(245,158,11,.14);color:#fbbf24;border:1px solid rgba(245,158,11,.28)}.gbn-reqa:hover{background:rgba(245,158,11,.24)}
 .gbn-force{background:transparent;color:#f97316;border:1px solid #c2410c;font-size:11px}
@@ -780,7 +792,6 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-s
 
 .wr-chip{padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700}
 .wr-ready{background:rgba(16,185,129,.13);color:#34d399}
-.wr-hold{background:rgba(100,116,139,.13);color:#94a3b8}
 .wr-review{background:rgba(245,158,11,.13);color:#fbbf24}
 .wr-running{background:rgba(59,130,246,.13);color:#60a5fa}
 
@@ -802,6 +813,15 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-s
   resize:vertical;min-height:76px;font-family:inherit;
 }
 .modal-ta:focus{outline:none;border-color:rgba(99,102,241,.5)}
+.modal-quick{display:none;gap:8px;margin-top:9px}
+.modal-quick.show{display:flex;flex-wrap:wrap}
+.modal-quick-btn{
+  border:1px solid rgba(99,102,241,.28);background:rgba(99,102,241,.1);color:#c7d2fe;
+  border-radius:8px;padding:8px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;
+}
+.modal-quick-btn:hover{background:rgba(99,102,241,.18);border-color:rgba(99,102,241,.45)}
+.modal-quick-btn.risk{border-color:rgba(239,68,68,.32);background:rgba(239,68,68,.1);color:#fca5a5}
+.modal-quick-btn.risk:hover{background:rgba(239,68,68,.18);border-color:rgba(239,68,68,.48)}
 .modal-acts{display:flex;gap:8px;margin-top:11px;justify-content:flex-end}
 .modal-cancel{padding:7px 18px;border-radius:7px;border:none;background:rgba(255,255,255,.07);color:#94a3b8;cursor:pointer;font-family:inherit;font-size:12px}
 .modal-submit{padding:7px 18px;border-radius:7px;border:none;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;cursor:pointer;font-size:12px;font-weight:700;font-family:inherit}
@@ -994,7 +1014,7 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-s
         </div>
         <div id="qf-bugs" class="g-qa-bugs"></div>
         <div class="g-qa-acts">
-          <button class="gbn gbn-senddev" onclick="openModal('send_to_dev','Send Back to DEV','Bugs to fix (DEV will see this):',false)"> Send to DEV</button>
+          <button class="gbn gbn-senddev" onclick="openModal('send_to_dev','Send Back to DEV','Manual override: DEV will run even if the comment mentions UX/QA terms.',false)"> Send to DEV</button>
           <button class="gbn gbn-reqa" onclick="openModal('request_changes','Re-run QA','What to fix before re-testing:',false)"> Re-run QA</button>
           <button class="gbn gbn-force" onclick="openModal('force_approve',' Force Override','DANGEROUS  provide business justification:',true)"> Force Override</button>
         </div>
@@ -1005,8 +1025,8 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-s
         <div class="g-normal">
           <span class="g-icon"></span>
           <div style="flex:1">
-            <div class="g-title">HITL - Human-in-the-Loop Review</div>
-            <div class="g-sub">All agents have completed. Review all artifacts before approving release.</div>
+            <div class="g-title" id="hitl-title">HITL - Human-in-the-Loop Review</div>
+            <div class="g-sub" id="hitl-sub">All agents have completed. Review all artifacts before approving release.</div>
             <!-- Risk warning -->
             <div id="hitl-risk" style="display:none;margin-top:6px;font-size:11px;color:#fca5a5;
               background:rgba(239,68,68,.08);border-left:2px solid #ef4444;padding:4px 8px;border-radius:0 4px 4px 0">
@@ -1014,13 +1034,14 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-s
             </div>
             <!-- QA bugs -->
             <div id="hitl-qa-bugs" style="display:none;margin-top:6px"></div>
+            <div id="hitl-agent-outputs" class="hitl-output-grid"></div>
           </div>
           <span class="chip chip-indigo" id="hitl-chip">REVIEW</span>
         </div>
         <div id="hitl-actions" class="g-actions">
           <button class="gbn gbn-approve" onclick="doAction('approve','')">Approve Release</button>
           <button class="gbn gbn-changes" onclick="openModal('request_changes','Request Changes - Supervisor will route fix','Describe what needs to be fixed. The supervisor will infer PO/UX/DEV/QA from your comment:',false)">Request Changes</button>
-          <button class="gbn gbn-hold" onclick="openModal('hold','Place on Hold','Reason for hold:',false)">Hold</button>
+          <button class="gbn gbn-reject" onclick="openModal('reject','Reject Release','Explain why this should not be released:',false)">Reject</button>
         </div>
       </div>
 
@@ -1371,6 +1392,13 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-s
     <h3 id="modal-title">Comment</h3>
     <p id="modal-desc"></p>
     <textarea id="modal-ta" class="modal-ta" placeholder="Enter your comment" rows="3"></textarea>
+    <div id="modal-quick" class="modal-quick">
+      <button type="button" class="modal-quick-btn" onclick="setQuickFeedback('bugs')">Fix Bugs</button>
+      <button type="button" class="modal-quick-btn risk" onclick="setQuickFeedback('risk')">Fix Risk</button>
+      <button type="button" class="modal-quick-btn" onclick="setQuickFeedback('ui')">Rewrite UI</button>
+      <button type="button" class="modal-quick-btn" onclick="setQuickFeedback('po')">Restart PO</button>
+      <button type="button" class="modal-quick-btn" onclick="setQuickFeedback('test')">Restart Test</button>
+    </div>
     <div class="modal-acts">
       <button class="modal-cancel" onclick="closeModal()">Cancel</button>
       <button id="modal-submit" class="modal-submit" onclick="submitModal()">Submit</button>
@@ -1611,7 +1639,7 @@ const PHASE_GROUPS = {
   UX:         ['UX_RUNNING'],
   DEV:        ['DEV_RUNNING'],
   QA:         ['QA_RUNNING'],
-  FINAL:      ['HITL_REVIEW','READY','HOLD'],
+  FINAL:      ['HITL_REVIEW','READY','REJECTED'],
 };
 
 const PHASES_ORDER = ['SUPERVISOR','PO','UX','DEV','QA','FINAL'];
@@ -1638,7 +1666,7 @@ function updateStatusChip(s) {
     RUNNING:      ['sc-run',   ' RUNNING'],
     WAITING_GATE: ['sc-wait',  ' GATE OPEN'],
     RISK_BLOCKED: ['sc-risk',  ' RISK BLOCKED'],
-    DONE:         s.workflow_state === 'READY' ? ['sc-done',' RELEASED'] : ['sc-hold',' ON HOLD'],
+    DONE:         s.workflow_state === 'REJECTED' ? ['sc-reject',' REJECTED'] : ['sc-done',' RELEASED'],
   };
   const [cls, label] = map[s.status] || ['sc-idle', s.status];
   chip.classList.add(cls);
@@ -1708,10 +1736,10 @@ function setPhaseCard(key, status, progress = 0, label = '') {
     card.classList.add('ph-done');
     badge.className = 'badge bd-done';
     badge.textContent = 'Released';
-  } else if (status === 'hold') {
+  } else if (status === 'rejected') {
     card.classList.add('ph-done');
     badge.className = 'badge bd-done';
-    badge.textContent = 'Hold';
+    badge.textContent = 'Rejected';
   } else {
     card.classList.add('ph-idle');
     badge.className = 'badge bd-idle';
@@ -1774,8 +1802,8 @@ function updatePhaseCards(s) {
     setPhaseCard('final', 'review', 100);
   } else if (wf === 'READY') {
     setPhaseCard('final', 'released', 100);
-  } else if (wf === 'HOLD') {
-    setPhaseCard('final', 'hold', 100);
+  } else if (wf === 'REJECTED') {
+    setPhaseCard('final', 'rejected', 100);
   } else {
     setPhaseCard('final', completeCount === 4 ? 'queued' : 'idle', 0);
   }
@@ -1785,9 +1813,9 @@ function updatePhaseCards(s) {
     if (wf === 'READY') {
       dec.style.display = 'flex';
       dec.innerHTML = '<span>OK</span><span style="color:#34d399;font-weight:700">RELEASED</span>';
-    } else if (wf === 'HOLD') {
+    } else if (wf === 'REJECTED') {
       dec.style.display = 'flex';
-      dec.innerHTML = '<span>HOLD</span><span style="color:#94a3b8;font-weight:700">ON HOLD</span>';
+      dec.innerHTML = '<span>NO</span><span style="color:#f87171;font-weight:700">REJECTED</span>';
     } else if ((s.approvals || []).some(ap => (ap.decision || '').toLowerCase() !== 'approve')) {
       dec.style.display = 'flex';
       dec.innerHTML = `<span>REWORK</span><span style="color:#fbbf24;font-size:10px">Cycle ${s.rework_count}</span>`;
@@ -1861,6 +1889,10 @@ function updateGates(s) {
 }
 
 function renderHITLGate(s) {
+  el('hitl-title').textContent = 'HITL - Human-in-the-Loop Review';
+  el('hitl-sub').textContent = 'All agents have completed. Review all artifacts before approving release.';
+  renderHitlAgentOutputs();
+
   // Risk info
   const riskEl = el('hitl-risk');
   if (s.risk_level === 'HIGH' && s.risk_files?.length) {
@@ -1890,6 +1922,38 @@ function renderHITLGate(s) {
     else if (s.risk_level === 'HIGH') { chip.textContent = 'RISK=HIGH'; chip.style.background = 'rgba(239,68,68,.2)'; chip.style.color = '#fca5a5'; }
     else { chip.textContent = 'REVIEW'; chip.style.background = ''; chip.style.color = ''; }
   }
+
+  const actions = el('hitl-actions');
+  if (actions) {
+    actions.innerHTML = `
+      <button class="gbn gbn-approve" onclick="doAction('approve','')">Approve Release</button>
+      <button class="gbn gbn-changes" onclick="openModal('request_changes','Request Changes - Supervisor will route fix','Supervisor will infer PO/UX/DEV/QA from the comment. Short commands: fix bug001, fix bug002, fix risk, fix block.',false)">Request Changes</button>
+      <button class="gbn gbn-reject" onclick="openModal('reject','Reject Release','Explain why this should not be released:',false)">Reject</button>
+    `;
+  }
+}
+
+function renderHitlAgentOutputs() {
+  const box = el('hitl-agent-outputs');
+  if (!box) return;
+  const groups = [
+    {title:'PO Output', items:[['prd','PRD'], ['user_stories','User Stories'], ['acceptance_criteria','Acceptance Criteria']]},
+    {title:'UX Output', items:[['ux_spec','UX Spec'], ['user_flow','User Flow'], ['wireframe_spec','Wireframe Spec']]},
+    {title:'DEV Output', items:[['implementation_plan','Implementation Plan'], ['mock_code_diff','Code Diff'], ['risk_assessment','Risk Assessment']]},
+  ];
+  box.innerHTML = groups.map(g => `
+    <div class="hitl-output-card">
+      <div class="hitl-output-title">${g.title}</div>
+      <div class="hitl-output-links">
+        ${g.items.map(([key,label]) => `<button type="button" class="hitl-output-link" onclick="openHitlArtifact('${key}','${label}')">${label}</button>`).join('')}
+      </div>
+    </div>
+  `).join('');
+}
+
+function openHitlArtifact(key, label) {
+  showView('artifacts');
+  loadArt(key, label);
 }
 
 // Old gate render functions removed  replaced by single HITL gate (renderHITLGate above)
@@ -2050,9 +2114,10 @@ async function doAction(decision, comment) {
   });
   const msgs = {
     approve:' HITL approved  feature released!',
-    hold:' Feature placed on hold',
-    reject:' Feedback sent to Supervisor  routing fix automatically',
+    reject:' Feature rejected  workflow stopped',
     request_changes:' Feedback sent to Supervisor  routing fix automatically',
+    send_to_dev:' Feedback sent to DEV Agent',
+    force_approve:' Force override approved',
   };
   showToast(msgs[decision] || decision);
 }
@@ -2142,7 +2207,7 @@ async function loadAdminData() {
   try {
     const act = await (await fetch('/api/admin/activity', {headers: authHdr})).json();
     const statusCls = {
-      READY:'wr-ready', HOLD:'wr-hold',
+      READY:'wr-ready',
       DEV_REVIEW:'wr-review', QA_REVIEW:'wr-review', RUNNING:'wr-running'
     };
     el('activity-tbody').innerHTML = act.map(a => `
@@ -2167,6 +2232,7 @@ function openModal(action, title, desc='', danger=false) {
   el('modal-title').textContent = title;
   el('modal-desc').textContent  = desc;
   el('modal-ta').value          = '';
+  el('modal-quick').classList.toggle('show', action === 'request_changes');
   const sub = el('modal-submit');
   sub.textContent = danger ? ' Confirm Override' : 'Submit';
   sub.className   = 'modal-submit' + (danger ? ' danger' : '');
@@ -2176,7 +2242,21 @@ function openModal(action, title, desc='', danger=false) {
 
 function closeModal() {
   el('modal-ov').classList.remove('show');
+  el('modal-quick').classList.remove('show');
   pendingAction = null;
+}
+
+function setQuickFeedback(type) {
+  const prompts = {
+    bugs: 'fix bugs: resolve all QA blockers and major bugs before re-submitting for HITL review.',
+    risk: 'fix risk: mitigate Risk=HIGH caused by auth flow + DB schema changes, update implementation/migration, then re-submit for review.',
+    ui: 'rewrite ui: rerun UX Agent to redesign the UI, user flow, wireframes, and component handoff.',
+    po: 'restart po: rerun Product Owner Agent to revise PRD, user stories, acceptance criteria, and scope.',
+    test: 'restart test: rerun QA Agent to regenerate test cases, coverage matrix, and QA report.',
+  };
+  el('modal-ta').value = prompts[type] || '';
+  el('modal-ta').style.borderColor = '';
+  el('modal-ta').focus();
 }
 
 function submitModal() {

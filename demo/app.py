@@ -432,7 +432,7 @@ async def _run_dev(is_rework: bool = False):
     log("A2A_PROTOCOL", "A2A_MESSAGE_SENT", "DEV sent build artifact, changed files, and risk assessment to QA.", **_worker_trace("dev"))
     if is_rework:
         log("DEV_AGENT", "WORKER_COMPLETE",
-            " Fix applied: BUG-002 (redirect timeout). "
+            " Fix applied: requested implementation defects updated. "
             "Implementation artifacts updated. Delivered to Supervisor.",
             **_worker_trace("dev"))
     else:
@@ -459,7 +459,7 @@ async def _run_qa(is_rework: bool = False):
         await simulate_agent("QA_RUNNING", artifacts, "QA Agent", delay=1.0, worker_key="qa")
         log("MCP_TOOL_BUS", "MCP_CALL_JIRA", "Filed BUG-001 and BUG-002 with severity, test case, and owning file.", **_worker_trace("qa"))
         log("ERROR_ISOLATION_LAYER", "BUSINESS_LOGIC_ERROR_ISOLATED",
-            "QA detected owner-specific defects. Supervisor can route BUG-001 to UX and BUG-002 to DEV.",
+            "QA detected owner-specific defects. Supervisor can route issues to DEV for implementation rework.",
             **_worker_trace("qa"))
         log("QA_AGENT", "WORKER_COMPLETE_WITH_ISSUES",
             " BLOCKER: BUG-001 (Mobile Safari).  MAJOR: BUG-002 (timeout). "
@@ -568,6 +568,19 @@ def _determine_fix_target(feedback: str) -> str:
     """
     import re
     f = feedback.lower()
+    compact = re.sub(r'[^a-z0-9]+', '', f)
+
+    # Short demo commands. In this demo, reviewer shorthand means
+    # "send it back to DEV to change the implementation before QA retries."
+    if (
+        re.search(r'\bfix\s+(bug|block|blocker|risk)\b', f)
+        or compact in {"fixbug001", "fixbug002", "fixrisk", "fixblock", "fixblocker"}
+        or "highrisk" in compact
+        or "risk=high" in compact
+        or re.search(r'\b(auth\s*flow|db\s*schema|migration)\b', f)
+    ):
+        return "dev"
+
     explicit = {
         "po": ["po", "product owner", "prd", "requirement", "requirements", "acceptance criteria", "user story", "user stories", "scope"],
         "ux": ["ux", "ui", "design", "wireframe", "user flow", "screen", "layout", "mockup", "figma", "mobile safari", "button not visible", "login page"],
@@ -576,6 +589,10 @@ def _determine_fix_target(feedback: str) -> str:
     }
 
     # Known demo bugs point at the agent that owns the root cause.
+    if "bug001" in compact:
+        return "dev"
+    if "bug002" in compact:
+        return "dev"
     if "bug-001" in f:
         return "ux"
     if "bug-002" in f:
@@ -601,7 +618,19 @@ def _determine_fix_target(feedback: str) -> str:
         return "qa"
     return "qa"
 
-def _apply_targeted_fix_outcome(target: str):
+def _feedback_requests_risk_fix(feedback: str) -> bool:
+    import re
+    f = feedback.lower()
+    compact = re.sub(r'[^a-z0-9]+', '', f)
+    return (
+        compact == "fixrisk"
+        or re.search(r'\bfix\s+risk\b', f) is not None
+        or "risk=high" in compact
+        or "highrisk" in compact
+        or re.search(r'\b(auth\s*flow|db\s*schema|migration)\b', f) is not None
+    )
+
+def _apply_targeted_fix_outcome(target: str, feedback: str = ""):
     if target == "qa":
         state["qa_bugs"] = []
         state["qa_has_blocker"] = False
@@ -609,7 +638,7 @@ def _apply_targeted_fix_outcome(target: str):
 
     resolved_by_target = {
         "ux": {"BUG-001"},
-        "dev": {"BUG-002"},
+        "dev": {"BUG-001", "BUG-002"},
         "po": set(),
     }
     resolved = resolved_by_target.get(target, set())
@@ -619,27 +648,35 @@ def _apply_targeted_fix_outcome(target: str):
             bug.get("severity") == "BLOCKER" for bug in state["qa_bugs"]
         )
 
-async def supervisor_handle_feedback(feedback: str):
+    if target == "dev" and _feedback_requests_risk_fix(feedback):
+        state["risk_level"] = "LOW"
+        state["risk_files"] = []
+        log("DEV_AGENT", "RISK_MITIGATION_COMPLETE",
+            "Risk fix applied: auth flow and DB migration reviewed; risk lowered to LOW.",
+            **_worker_trace("dev"))
+
+async def supervisor_handle_feedback(feedback: str, forced_target: str | None = None):
     """Supervisor receives HITL feedback  routes targeted worker to fix  back to HITL."""
     state["current_gate"]  = None
     state["rework_count"] += 1
 
-    target = _determine_fix_target(feedback)
+    target = forced_target or _determine_fix_target(feedback)
     names  = {"po": "PO Agent", "ux": "UI/UX Agent", "dev": "DEV Agent", "qa": "QA Agent"}
 
     _supervisor_set(
-        f"HITL feedback received. Analyzing  routing fix to {names[target]}.",
+        f"HITL feedback received. {'Forced route' if forced_target else 'Analyzing  routing fix'} to {names[target]}.",
         "SUPERVISOR_REWORK"
     )
     log("SUPERVISOR", "FEEDBACK_ANALYSIS",
         f"Feedback: '{feedback[:120]}'  Target: {names[target]}. "
+        f"Mode: {'manual override' if forced_target else 'supervisor inference'}. "
         f"Rework cycle #{state['rework_count']}.")
     push_state()
     await asyncio.sleep(1.5)
 
     # Run only the worker selected by Supervisor.
     await _supervisor_route_workers(is_rework=True, start_from=target)
-    _apply_targeted_fix_outcome(target)
+    _apply_targeted_fix_outcome(target, feedback)
 
     _supervisor_set("Rework complete. Re-submitting to HITL for review.")
     log("SUPERVISOR", "REWORK_COMPLETE", state["supervisor_msg"])
@@ -657,25 +694,33 @@ async def hitl_decision(decision: str, comment: str):
     state["approvals"].append({"gate": gate["id"], "decision": decision,
                                "comment": comment, "ts": ts()})
 
-    if decision == "approve":
+    if decision in ("approve", "force_approve"):
         state["workflow_state"] = "READY"
         state["status"]         = "DONE"
         state["current_gate"]   = None
-        _supervisor_set(" Feature APPROVED by HITL. Workflow complete.")
-        log("SUPERVISOR", "WORKFLOW_RELEASED",
-            " Feature RELEASED  all agents passed HITL review.")
+        if decision == "force_approve":
+            _supervisor_set(" Feature force-approved by HITL override. Workflow complete.")
+            log("SUPERVISOR", "WORKFLOW_FORCE_RELEASED",
+                " Feature RELEASED by force override with HITL justification.")
+        else:
+            _supervisor_set(" Feature APPROVED by HITL. Workflow complete.")
+            log("SUPERVISOR", "WORKFLOW_RELEASED",
+                " Feature RELEASED  all agents passed HITL review.")
         push_state()
 
-    elif decision == "hold":
-        state["workflow_state"] = "HOLD"
+    elif decision == "reject":
+        state["workflow_state"] = "REJECTED"
         state["status"]         = "DONE"
         state["current_gate"]   = None
-        _supervisor_set(" Feature placed on HOLD by HITL reviewer.")
-        log("SUPERVISOR", "WORKFLOW_HOLD", state["supervisor_msg"])
+        _supervisor_set(" Feature REJECTED by HITL reviewer. Workflow stopped.")
+        log("SUPERVISOR", "WORKFLOW_REJECTED",
+            " Feature rejected by HITL. No agents will re-run from this decision.")
         push_state()
 
-    elif decision in ("reject", "request_changes"):
-        asyncio.create_task(supervisor_handle_feedback(comment or "Rework needed."))
+    elif decision in ("request_changes", "send_to_dev"):
+        feedback = comment or "Rework needed."
+        forced_target = "dev" if decision == "send_to_dev" else None
+        asyncio.create_task(supervisor_handle_feedback(feedback, forced_target=forced_target))
 
 #  Workflow entry point 
 async def run_workflow():
@@ -803,7 +848,7 @@ class ApprovalReq(BaseModel):
 
 @app.post("/api/approve")
 async def api_approve(req: ApprovalReq):
-    """HITL decision: approve | reject | request_changes | hold"""
+    """HITL decision: approve | reject | request_changes | send_to_dev | force_approve"""
     asyncio.create_task(hitl_decision(req.decision, req.comment))
     return {"ok": True}
 
@@ -878,7 +923,7 @@ def api_admin_activity(request: Request):
     require_admin(request)
     return [
         {"id": "WR-042", "feature": "Google Login",         "status": "READY",      "rework": 2, "duration": "3.2h", "user": "Alex Developer"},
-        {"id": "WR-041", "feature": "Dark Mode Toggle",     "status": "HOLD",       "rework": 1, "duration": "1.8h", "user": "Sam Reviewer"},
+        {"id": "WR-041", "feature": "Dark Mode Toggle",     "status": "READY",      "rework": 1, "duration": "1.8h", "user": "Sam Reviewer"},
         {"id": "WR-040", "feature": "2FA Enroll Screen",    "status": "DEV_REVIEW", "rework": 0, "duration": "2.1h", "user": "Alex Developer"},
         {"id": "WR-039", "feature": "Profile Photo Upload", "status": "READY",      "rework": 1, "duration": "1.5h", "user": "Alex Developer"},
         {"id": "WR-038", "feature": "Push Notifications",   "status": "QA_REVIEW",  "rework": 0, "duration": "4.0h", "user": "Sam Reviewer"},
