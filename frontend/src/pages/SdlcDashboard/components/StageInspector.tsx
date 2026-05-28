@@ -28,6 +28,7 @@ export default function StageInspector({ onRunIntent, onRunNext, onOpenGate, onV
   // The intent agent is like the "User Feature Request / Supervisor" in this graph
   const intentData = (phases as any)?.['intent'] ?? null;
   const isIntentDone = intentData?.status === 'completed';
+  const isIntentApproved = intentData?.hitlDecision?.decision === 'APPROVE' || intentData?.versionStatus === 'committed';
 
   return (
     <div className="arch-shell">
@@ -46,7 +47,7 @@ export default function StageInspector({ onRunIntent, onRunNext, onOpenGate, onV
               <div className="node-sub">Natural-language business request</div>
               <div style={{ marginTop: 8 }}>
                 <span className={`badge ${isIntentDone ? 'badge-done' : 'badge-idle'}`}>
-                  {isIntentDone ? 'Parsed' : 'Click to start'}
+                  {isIntentApproved ? 'Approved' : isIntentDone ? 'Review required' : 'Click to start'}
                 </span>
               </div>
             </div>
@@ -63,7 +64,7 @@ export default function StageInspector({ onRunIntent, onRunNext, onOpenGate, onV
                 </div>
                 <div className="ph-badges">
                   <span className={`badge ${isIntentDone ? 'badge-done' : 'badge-idle'}`}>
-                    {isIntentDone ? 'Active' : 'Idle'}
+                    {isIntentApproved ? 'Approved' : isIntentDone ? 'Waiting gate' : 'Idle'}
                   </span>
                 </div>
               </div>
@@ -76,7 +77,7 @@ export default function StageInspector({ onRunIntent, onRunNext, onOpenGate, onV
               {PHASES.map((phase, idx) => {
                 const phaseData = phases?.[phase.key] ?? null;
                 const prevPhaseData = idx === 0 ? intentData : phases?.[PHASES[idx - 1].key];
-                const isUnlocked = idx === 0 ? isIntentDone : (prevPhaseData?.hitlDecision?.decision === 'APPROVE');
+                const isUnlocked = idx === 0 ? isIntentApproved : (prevPhaseData?.hitlDecision?.decision === 'APPROVE');
                 
                 return (
                   <div className="arch-worker" key={phase.key}>

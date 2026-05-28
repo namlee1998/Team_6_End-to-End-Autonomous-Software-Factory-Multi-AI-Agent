@@ -1,4 +1,4 @@
-import api from './client';
+import api, { getBaseURL } from './client';
 import { getStoredAuthSession } from './authStorage';
 
 const BASE = '/sdlc';
@@ -25,8 +25,8 @@ export const runIntentAgent = (projectId: string, featureRequest: FeatureRequest
 
 // ── Run Agents ────────────────────────────────────────────────────────────
 
-export const runPOAgent = (projectId: string, featureRequest: FeatureRequest, projectContext: any = {}) =>
-  api.post(`${BASE}/run-po-agent`, { project_id: projectId, source_task_id: projectContext.intent_task_id || '', feature_request: featureRequest, project_context: projectContext })
+export const runPOAgent = (projectId: string, sourceTaskId: string, feedbackPrompt = '') =>
+  api.post(`${BASE}/run-po-agent`, { project_id: projectId, source_task_id: sourceTaskId, feedback_prompt: feedbackPrompt })
     .then((r) => r.data);
 
 export const runUXAgent = (sourceTaskId: string, feedbackPrompt = '') =>
@@ -80,7 +80,8 @@ export const subscribeTaskSSE = (
         headers['Authorization'] = `Bearer ${session.access_token}`;
       }
 
-      const response = await fetch(`/api/v1${BASE}/status/${taskId}`, { 
+      const baseUrl = getBaseURL().replace(/\/$/, '');
+      const response = await fetch(`${baseUrl}${BASE}/status/${taskId}`, {
         signal: abort.signal,
         headers
       });

@@ -23,7 +23,16 @@ router.use('/documents',   authMiddleware, documentRoutes);
 router.use('/projects',    authMiddleware, projectRoutes);
 router.use('/folders',     authMiddleware, folderRoutes);
 router.use('/tree',        authMiddleware, treeRoutes);
-router.use('/workflows',   authMiddleware, workflowRoutes);
+if (process.env.ENABLE_LEGACY_WORKFLOWS === 'true') {
+  router.use('/workflows', authMiddleware, workflowRoutes);
+} else {
+  router.use('/workflows', authMiddleware, (_req, res) => {
+    res.status(410).json({
+      status: 'error',
+      message: 'Legacy 3-agent mobile testcase workflow is disabled. Use /api/v1/sdlc instead.',
+    });
+  });
+}
 router.use('/sdlc',        authMiddleware, sdlcRoutes);     // ← AIDLC routes
 router.use('/sessions',    authMiddleware, sessionRoutes);
 router.use('/profile',     authMiddleware, profileRoutes);

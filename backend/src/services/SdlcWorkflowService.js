@@ -42,6 +42,13 @@ const NODE_TARGET = {
   'qa-agent':  'qa_agent',
 };
 
+const REWORK_TARGETS = {
+  po_agent:  { sourceType: 'intent-agent', run: 'runPOAgent' },
+  ux_agent:  { sourceType: 'po-agent',     run: 'runUXAgent' },
+  dev_agent: { sourceType: 'ux-agent',     run: 'runDEVAgent' },
+  qa_agent:  { sourceType: 'dev-agent',    run: 'runQAAgent' },
+};
+
 /** SHA-256 content hash */
 function contentHash(value) {
   const json = typeof value === 'string' ? value : JSON.stringify(value);
@@ -52,21 +59,75 @@ function contentHash(value) {
 function buildTaskResult(task, artifacts = []) {
   const byType = {};
   for (const art of artifacts) {
-    if (!byType[art.artifactType]) byType[art.artifactType] = [];
-    byType[art.artifactType].push(art);
+    const artifactType = art.artifactType || art.type;
+    if (!byType[artifactType]) byType[artifactType] = [];
+    byType[artifactType].push(art);
   }
 
   return {
     agentType: task.type,
     artifacts: artifacts.map((a) => ({
       id: a.id,
-      type: a.artifactType,
-      key: a.artifactKey,
+      phase: a.phase || a.agentType,
+      type: a.type || a.artifactType,
+      key: a.key || a.artifactKey,
       title: a.title,
       contentText: a.contentText,
       contentJson: a.contentJson,
     })),
     ...task.result,
+  };
+}
+
+async function resolveArtifactContent(artifact) {
+  let contentText = artifact.contentText;
+  let contentJson = artifact.contentJson;
+
+  if (typeof contentText === 'string' && contentText.startsWith('FILE:')) {
+    try {
+      contentText = await fs.readFile(contentText.slice(5), 'utf8');
+    } catch (_) {
+      contentText = 'File not found';
+    }
+  }
+
+  if (!contentText && contentJson?.file_path) {
+    try {
+      const raw = await fs.readFile(contentJson.file_path, 'utf8');
+      try {
+        contentJson = JSON.parse(raw);
+      } catch (_) {
+        contentText = raw;
+        contentJson = null;
+      }
+    } catch (_) {
+      contentText = 'File not found';
+    }
+  }
+
+  return { contentText, contentJson };
+}
+
+async function formatArtifactForClient(artifact) {
+  const { contentText, contentJson } = await resolveArtifactContent(artifact);
+  return {
+    id: artifact.id,
+    taskId: artifact.taskId,
+    projectId: artifact.projectId,
+    phase: artifact.agentType,
+    agentType: artifact.agentType,
+    type: artifact.artifactType,
+    artifactType: artifact.artifactType,
+    key: artifact.artifactKey,
+    artifactKey: artifact.artifactKey,
+    title: artifact.title,
+    contentText,
+    contentJson,
+    ordinal: artifact.ordinal,
+    sourceArtifactId: artifact.sourceArtifactId,
+    contentHash: artifact.contentHash,
+    createdAt: artifact.createdAt,
+    updatedAt: artifact.updatedAt,
   };
 }
 
@@ -108,7 +169,10 @@ class SdlcWorkflowService {
     const sourceTask = await this._requireApprovedTask(sourceTaskId, 'intent-agent', user);
 
     const sourceArtifacts = await AgentArtifact.findByTaskId(sourceTask.id);
-    const inputHash = contentHash(sourceArtifacts.map((a) => a.contentHash));
+    const inputHash = contentHash({
+      artifacts: sourceArtifacts.map((a) => a.contentHash),
+      feedbackPrompt,
+    });
 
     const task = await Task.create({
       id: uuidv4(),
@@ -139,7 +203,10 @@ class SdlcWorkflowService {
     const sourceTask = await this._requireApprovedTask(sourceTaskId, 'po-agent', user);
 
     const sourceArtifacts = await AgentArtifact.findByTaskId(sourceTask.id);
-    const inputHash = contentHash(sourceArtifacts.map((a) => a.contentHash));
+    const inputHash = contentHash({
+      artifacts: sourceArtifacts.map((a) => a.contentHash),
+      feedbackPrompt,
+    });
 
     const task = await Task.create({
       id: uuidv4(),
@@ -162,15 +229,19 @@ class SdlcWorkflowService {
    */
   async runDEVAgent({ projectId, sourceTaskId, feedbackPrompt = '', user }) {
     const sourceTask = await this._requireApprovedTask(sourceTaskId, 'ux-agent', user);
+    const effectiveProjectId = projectId || sourceTask.projectId;
 
     // Also load PO artifacts for DEV context
-    const poTask = await Task.findLatestByProject(projectId, 'po-agent', 'completed', 'committed');
+    const poTask = await Task.findLatestByProject(effectiveProjectId, 'po-agent', 'completed', 'committed');
     const [uxArtifacts, poArtifacts] = await Promise.all([
       AgentArtifact.findByTaskId(sourceTask.id),
       poTask ? AgentArtifact.findByTaskId(poTask.id) : Promise.resolve([]),
     ]);
 
-    const inputHash = contentHash([...uxArtifacts, ...poArtifacts].map((a) => a.contentHash));
+    const inputHash = contentHash({
+      artifacts: [...uxArtifacts, ...poArtifacts].map((a) => a.contentHash),
+      feedbackPrompt,
+    });
 
     const task = await Task.create({
       id: uuidv4(),
@@ -193,10 +264,11 @@ class SdlcWorkflowService {
    */
   async runQAAgent({ projectId, sourceTaskId, feedbackPrompt = '', user }) {
     const sourceTask = await this._requireApprovedTask(sourceTaskId, 'dev-agent', user);
+    const effectiveProjectId = projectId || sourceTask.projectId;
 
     const [poTask, uxTask] = await Promise.all([
-      Task.findLatestByProject(projectId, 'po-agent', 'completed', 'committed'),
-      Task.findLatestByProject(projectId, 'ux-agent', 'completed', 'committed'),
+      Task.findLatestByProject(effectiveProjectId, 'po-agent', 'completed', 'committed'),
+      Task.findLatestByProject(effectiveProjectId, 'ux-agent', 'completed', 'committed'),
     ]);
 
     const allArtifacts = (
@@ -207,7 +279,10 @@ class SdlcWorkflowService {
       ])
     ).flat();
 
-    const inputHash = contentHash(allArtifacts.map((a) => a.contentHash));
+    const inputHash = contentHash({
+      artifacts: allArtifacts.map((a) => a.contentHash),
+      feedbackPrompt,
+    });
 
     const task = await Task.create({
       id: uuidv4(),
@@ -280,24 +355,46 @@ class SdlcWorkflowService {
    */
   async triggerRework({ projectId, sourceTaskId, feedbackPrompt, user }) {
     console.log(`[SDLC] Triggering Rework for project ${projectId}. Feedback: "${feedbackPrompt}"`);
-    
+
+    const rejectedTask = await Task.findById(sourceTaskId);
+    if (!rejectedTask) throw new ApiError(404, 'Source task not found');
+    if (user) await MembershipService.requireProjectRole(user.id, rejectedTask.projectId, ['owner', 'admin', 'editor']);
+
+    if (rejectedTask.type === 'intent-agent') {
+      const featureRequest = await this._getFeatureRequestFromIntentTask(rejectedTask);
+      return this.runIntentAgent({
+        projectId: rejectedTask.projectId,
+        featureRequest,
+        feedbackPrompt,
+        user,
+      });
+    }
+
     // 1. Ask python Agent Server to analyze the feedback and route it
     const targetAgent = await AgentService.routeRework(feedbackPrompt);
     console.log(`[SDLC] Agent Server routed rework to: ${targetAgent}`);
 
-    // 2. Trigger the appropriate Agent based on the routing decision
-    if (targetAgent === 'po_agent') {
-      return this.runPOAgent({ projectId, sourceTaskId, feedbackPrompt, user });
-    } else if (targetAgent === 'ux_agent') {
-      return this.runUXAgent({ projectId, sourceTaskId, feedbackPrompt, user });
-    } else if (targetAgent === 'dev_agent') {
-      return this.runDEVAgent({ projectId, sourceTaskId, feedbackPrompt, user });
-    } else if (targetAgent === 'qa_agent') {
-      return this.runQAAgent({ projectId, sourceTaskId, feedbackPrompt, user });
-    } else {
+    const reworkTarget = REWORK_TARGETS[targetAgent] || REWORK_TARGETS.dev_agent;
+    if (!REWORK_TARGETS[targetAgent]) {
       console.warn(`[SDLC] Unrecognized rework target: ${targetAgent}. Defaulting to DEV.`);
-      return this.runDEVAgent({ projectId, sourceTaskId, feedbackPrompt, user });
     }
+
+    const upstream = await Task.findLatestByProject(
+      projectId || rejectedTask.projectId,
+      reworkTarget.sourceType,
+      'completed',
+      'committed',
+    );
+    if (!upstream) {
+      throw new ApiError(400, `Cannot rework ${targetAgent}: no committed ${reworkTarget.sourceType} source found`);
+    }
+
+    return this[reworkTarget.run]({
+      projectId: projectId || rejectedTask.projectId,
+      sourceTaskId: upstream.id,
+      feedbackPrompt,
+      user,
+    });
   }
 
   // =========================================================================
@@ -337,21 +434,7 @@ class SdlcWorkflowService {
         dev: devTask ? { taskId: devTask.id, status: devTask.status, versionStatus: devTask.versionStatus } : null,
         qa: qaTask ? { taskId: qaTask.id, status: qaTask.status, versionStatus: qaTask.versionStatus } : null,
       },
-      artifacts: await Promise.all(allArtifacts.map(async (a) => {
-        let text = a.contentText;
-        if (text && text.startsWith('FILE:')) {
-          try { text = await fs.readFile(text.slice(5), 'utf8'); } catch (e) { text = 'File not found'; }
-        }
-        return {
-          id: a.id,
-          phase: a.agentType,
-          type: a.artifactType,
-          key: a.artifactKey,
-          title: a.title,
-          contentText: text,
-          contentJson: a.contentJson,
-        };
-      })),
+      artifacts: await Promise.all(allArtifacts.map((a) => formatArtifactForClient(a))),
       hitlDecisions,
       generatedAt: new Date().toISOString(),
     };
@@ -423,13 +506,7 @@ class SdlcWorkflowService {
       HitlDecision.findByTaskId(taskId),
     ]);
 
-    task.artifacts = await Promise.all(artifacts.map(async (a) => {
-      let text = a.contentText;
-      if (text && text.startsWith('FILE:')) {
-        try { text = await fs.readFile(text.slice(5), 'utf8'); } catch (e) { text = 'File not found'; }
-      }
-      return { ...a, contentText: text };
-    }));
+    task.artifacts = await Promise.all(artifacts.map((a) => formatArtifactForClient(a)));
     task.result = buildTaskResult(task, task.artifacts);
     task.hitlDecision = hitlDecision;
     task.gate = AGENT_GATES[task.type] || null;
@@ -510,7 +587,7 @@ class SdlcWorkflowService {
     if (user) await MembershipService.requireProjectRole(user.id, task.projectId, ['owner', 'admin', 'editor']);
     if (task.type !== expectedType) throw new ApiError(400, `Source task must be type: ${expectedType}`);
     if (task.status !== 'completed') throw new ApiError(400, 'Source task must be completed');
-    if (task.type !== 'intent-agent' && task.versionStatus !== 'committed') {
+    if (task.versionStatus !== 'committed') {
       throw new ApiError(400, 'Source task must be approved (committed) before running next agent');
     }
     return task;
@@ -520,10 +597,8 @@ class SdlcWorkflowService {
     const context = { ...extras };
     for (const art of artifacts) {
       if (!context[art.artifactType]) context[art.artifactType] = [];
-      let content = art.contentText || art.contentJson;
-      if (typeof content === 'string' && content.startsWith('FILE:')) {
-        try { content = await fs.readFile(content.slice(5), 'utf8'); } catch (e) { content = ''; }
-      }
+      const resolved = await resolveArtifactContent(art);
+      const content = resolved.contentText ?? resolved.contentJson ?? '';
       context[art.artifactType].push({
         key: art.artifactKey,
         title: art.title,
@@ -531,6 +606,33 @@ class SdlcWorkflowService {
       });
     }
     return context;
+  }
+
+  async _getFeatureRequestFromIntentTask(task) {
+    const featureArtifacts = await AgentArtifact.findByTaskIdAndType(task.id, 'feature_request');
+    if (featureArtifacts.length > 0) {
+      const resolved = await resolveArtifactContent(featureArtifacts[0]);
+      const featureRequest = resolved.contentJson || resolved.contentText;
+      if (featureRequest && typeof featureRequest === 'object' && featureRequest.title) {
+        return featureRequest;
+      }
+      if (typeof featureRequest === 'string' && featureRequest.trim()) {
+        return { title: 'Rework feature request', description: featureRequest };
+      }
+    }
+
+    const assumptions = await AgentArtifact.findByTaskIdAndType(task.id, 'intent_assumptions');
+    if (assumptions.length > 0) {
+      const resolved = await resolveArtifactContent(assumptions[0]);
+      if (resolved.contentText && resolved.contentText.trim()) {
+        return {
+          title: 'Rework feature request',
+          description: resolved.contentText,
+        };
+      }
+    }
+
+    throw new ApiError(400, 'Cannot rework intent task: original feature request artifact is missing');
   }
 
   async _writeArtifactToFile(projectId, taskId, filename, content) {
@@ -568,6 +670,9 @@ class SdlcWorkflowService {
           const ext = path.extname(file);
           const content = await fs.readFile(path.join(mockDir, file), 'utf8');
           completedData[key] = ext === '.json' ? JSON.parse(content) : content;
+        }
+        if (task.type === 'intent-agent' && context.featureRequest) {
+          completedData.feature_request = context.featureRequest;
         }
 
         // Simulate processing delay
@@ -620,6 +725,9 @@ class SdlcWorkflowService {
         try {
           if (agentError) throw new Error(agentError);
           if (!completedData) throw new Error('Agent returned no data');
+          if (task.type === 'intent-agent' && context.featureRequest) {
+            completedData.feature_request = context.featureRequest;
+          }
 
           await this._saveAgentData(task, completedData, userId);
         } catch (err) {
@@ -639,10 +747,13 @@ class SdlcWorkflowService {
   async _saveAgentData(task, completedData, userId) {
     // Save each artifact returned by the agent
     const artifactRows = [];
-    const artifactTypes = ['intent_assumptions', 'clarifying_questions', 'prd', 'user_stories', 'acceptance_criteria', 'scope',
-      'ux_spec', 'user_flow', 'wireframe_spec', 'component_inventory',
-      'implementation_plan', 'mock_code_diff', 'changed_files', 'risk_assessment',
-      'test_cases', 'qa_report', 'ac_coverage_matrix'];
+    const artifactTypes = ['feature_request', 'intent_assumptions', 'clarifying_questions',
+      'prd', 'user_stories', 'acceptance_criteria', 'scope', 'out_of_scope',
+      'ux_spec', 'user_flow', 'wireframe_spec', 'component_inventory', 'screens',
+      'architecture_ledger_update', 'implementation_plan', 'mock_code_diff', 'changed_files',
+      'risk_assessment', 'risk_level', 'sandbox_report', 'patch_branch', 'patch_commit',
+      'test_cases', 'qa_report', 'ac_coverage_matrix', 'pass_count', 'fail_count',
+      'blocker_count', 'release_recommendation'];
 
     for (const artType of artifactTypes) {
       if (completedData[artType]) {

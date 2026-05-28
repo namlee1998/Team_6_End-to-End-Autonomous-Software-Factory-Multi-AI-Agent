@@ -92,7 +92,7 @@ export default function SdlcDashboard() {
 
   const handleRunNext = async (phase: typeof PHASES[number]['key'], sourceTaskId: string, feedbackPrompt?: string) => {
     const runners: Record<string, (id: string, fp?: string) => Promise<{ task_id: string }>> = {
-      po:  (id, fp) => sdlcApi.runPOAgent(projectId!, { title: 'Resume' }, { intent_task_id: id, feedback_prompt: fp }),
+      po:  (id, fp) => sdlcApi.runPOAgent(projectId!, id, fp),
       ux:  (id, fp) => sdlcApi.runUXAgent(id, fp),
       dev: (id, fp) => sdlcApi.runDEVAgent(id, fp),
       qa:  (id, fp) => sdlcApi.runQAAgent(id, fp),

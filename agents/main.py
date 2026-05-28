@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 from dotenv import load_dotenv
@@ -23,7 +24,16 @@ from src.schemas import (
     Agent3Input,
     RunAgentRequest,
 )
-from src.schemas.aidlc import FeatureRequest, IntentAgentInput
+from src.schemas.aidlc import (
+    DEVAgentInput,
+    FeatureRequest,
+    IntentAgentInput,
+    POAgentInput,
+    ProjectContext,
+    QAAgentInput,
+    UXAgentInput,
+    UserStory,
+)
 from src.agents.intent_agent import run_intent_agent, stream_intent_agent
 from src.observability import create_trace_context, flush_observability
 from src.workflows.main_pipeline import get_graph, determine_fix_target
@@ -62,7 +72,14 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        origin.strip()
+        for origin in os.getenv(
+            "AGENTS_CORS_ORIGINS",
+            "http://localhost:5173,http://localhost:3000",
+        ).split(",")
+        if origin.strip()
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -73,18 +90,112 @@ app.add_middleware(
 # Helper: dispatch to the right agent
 # =============================================================================
 
+def _first_context_value(context: dict, key: str, default=None):
+    value = context.get(key, default)
+    if isinstance(value, list) and value:
+        first = value[0]
+        if isinstance(first, dict) and "content" in first:
+            return first["content"]
+        return first
+    return value
+
+
+def _text_context(context: dict, key: str, default: str = "") -> str:
+    value = _first_context_value(context, key, default)
+    if isinstance(value, str):
+        return value
+    if value is None:
+        return default
+    return json.dumps(value, ensure_ascii=False)
+
+
+def _list_context(context: dict, key: str) -> list:
+    value = _first_context_value(context, key, [])
+    if isinstance(value, list):
+        return value
+    return []
+
+
+def _feedback_context(context: dict) -> str:
+    return context.get("feedback_prompt") or context.get("feedbackPrompt") or ""
+
+
+def _feature_request_from_context(context: dict) -> FeatureRequest:
+    raw = (
+        _first_context_value(context, "feature_request")
+        or _first_context_value(context, "featureRequest")
+        or _first_context_value(context, "feature_request")
+    )
+    if isinstance(raw, FeatureRequest):
+        return raw
+    if isinstance(raw, dict):
+        return FeatureRequest(**raw)
+
+    assumptions = _text_context(context, "intent_assumptions")
+    title = "Approved feature request"
+    description = assumptions or "Derived from approved intent artifacts."
+    return FeatureRequest(title=title, description=description)
+
+
+def _project_context_from_context(context: dict) -> ProjectContext:
+    raw = context.get("project_context") or context.get("projectContext")
+    if isinstance(raw, ProjectContext):
+        return raw
+    if isinstance(raw, dict):
+        return ProjectContext(**raw)
+    return ProjectContext(project_id=context.get("project_id", "PRJ-001"))
+
+
+def _user_stories_from_context(context: dict) -> list[UserStory]:
+    stories = _list_context(context, "user_stories")
+    return [UserStory(**story) if isinstance(story, dict) else story for story in stories]
+
 
 def _parse_agent_input(node_target: str, context: dict):
     """Parse context dict into the correct agent input schema."""
     if node_target == "intent_node":
-        fr_data = context.get("feature_request", {})
+        fr_data = context.get("feature_request") or context.get("featureRequest") or {}
         fr = FeatureRequest(**fr_data) if isinstance(fr_data, dict) else fr_data
         return IntentAgentInput(
             feature_request=fr,
-            feedback_prompt=context.get("feedback_prompt", ""),
+            feedback_prompt=_feedback_context(context),
         )
-    else:
-        raise ValueError(f"Unknown node_target: {node_target}")
+    if node_target == "po_agent":
+        return POAgentInput(
+            feature_request=_feature_request_from_context(context),
+            project_context=_project_context_from_context(context),
+            feedback_prompt=_feedback_context(context),
+        )
+    if node_target == "ux_agent":
+        return UXAgentInput(
+            prd=_text_context(context, "prd"),
+            user_stories=_user_stories_from_context(context),
+            acceptance_criteria=_list_context(context, "acceptance_criteria"),
+            feedback_prompt=_feedback_context(context),
+        )
+    if node_target == "dev_agent":
+        return DEVAgentInput(
+            prd=_text_context(context, "prd"),
+            ux_spec=_text_context(context, "ux_spec"),
+            user_flow=_text_context(context, "user_flow"),
+            acceptance_criteria=_list_context(context, "acceptance_criteria"),
+            project_context=_project_context_from_context(context),
+            architecture_ledger=_text_context(context, "architecture_ledger"),
+            feedback_prompt=_feedback_context(context),
+        )
+    if node_target == "qa_agent":
+        return QAAgentInput(
+            prd=_text_context(context, "prd"),
+            acceptance_criteria=_list_context(context, "acceptance_criteria"),
+            ux_spec=_text_context(context, "ux_spec"),
+            implementation_plan=_text_context(context, "implementation_plan"),
+            mock_code_diff=_text_context(context, "mock_code_diff"),
+            sandbox_report=_text_context(context, "sandbox_report"),
+            risk_assessment=_text_context(context, "risk_assessment"),
+            risk_level=_text_context(context, "risk_level", "LOW"),
+            feedback_prompt=_feedback_context(context),
+        )
+    raise ValueError(f"Unknown node_target: {node_target}")
 
 
 async def _run_agent(node_target: str, input_data, trace_context=None):
@@ -99,8 +210,23 @@ async def _run_agent(node_target: str, input_data, trace_context=None):
         return await run_intent_agent(
             input_data, model_config=model_config, trace_context=trace_context
         )
-    else:
-        raise ValueError(f"Unknown node_target: {node_target}")
+    if node_target == "po_agent":
+        from src.agents.po_agent import run_po_agent
+
+        return await run_po_agent(input_data, model_config=model_config, trace_context=trace_context)
+    if node_target == "ux_agent":
+        from src.agents.ux_agent import run_ux_agent
+
+        return await run_ux_agent(input_data, model_config=model_config, trace_context=trace_context)
+    if node_target == "dev_agent":
+        from src.agents.dev_agent import run_dev_agent
+
+        return await run_dev_agent(input_data, model_config=model_config, trace_context=trace_context)
+    if node_target == "qa_agent":
+        from src.agents.qa_agent import run_qa_agent
+
+        return await run_qa_agent(input_data, model_config=model_config, trace_context=trace_context)
+    raise ValueError(f"Unknown node_target: {node_target}")
 
 
 async def _stream_agent(
