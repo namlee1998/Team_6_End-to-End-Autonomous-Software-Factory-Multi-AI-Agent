@@ -59,6 +59,7 @@ async def run_qa_agent(input_data: QAAgentInput, model_config=None, trace_contex
     if input_data.prd: content += f"PRD Summary:\n{input_data.prd[:3000]}\n\n"
     if input_data.ux_spec: content += f"UX Spec (summary):\n{input_data.ux_spec[:2000]}\n\n"
     if input_data.implementation_plan: content += f"Implementation Plan:\n{input_data.implementation_plan[:2000]}\n\n"
+    if input_data.sandbox_report: content += f"Sandbox Report:\n{input_data.sandbox_report[:2000]}\n\n"
     if input_data.risk_assessment: content += f"Risk: {input_data.risk_level}\n{input_data.risk_assessment[:1000]}\n\n"
     if input_data.feedback_prompt:
         content = f"<human_feedback>\n{input_data.feedback_prompt}\n</human_feedback>\n\n{content}"
@@ -82,6 +83,7 @@ async def stream_qa_agent(input_data: QAAgentInput, model_config=None, trace_con
     if input_data.prd: content += f"PRD:\n{input_data.prd[:2000]}\n\n"
     if input_data.ux_spec: content += f"UX Spec:\n{input_data.ux_spec[:1500]}\n\n"
     if input_data.implementation_plan: content += f"Plan:\n{input_data.implementation_plan[:1500]}\n\n"
+    if input_data.sandbox_report: content += f"Sandbox:\n{input_data.sandbox_report[:1500]}\n\n"
     if input_data.feedback_prompt:
         content = f"<human_feedback>\n{input_data.feedback_prompt}\n</human_feedback>\n\n{content}"
     cfg = trace_context.langchain_config("qa_agent") if trace_context else None
