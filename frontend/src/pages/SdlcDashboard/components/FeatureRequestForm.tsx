@@ -1,7 +1,9 @@
 import { useState } from 'react';
 
+import { FeatureRequest } from '@/services/api/sdlcApi';
+
 interface Props {
-  onSubmit: (fr: { title: string; description: string; priority: string; target_user: string; business_goal: string; constraints: string[] }) => void;
+  onSubmit: (fr: FeatureRequest) => void;
   onCancel: () => void;
 }
 

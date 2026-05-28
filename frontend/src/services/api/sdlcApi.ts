@@ -1,6 +1,7 @@
-import axios from 'axios';
+import api from './client';
+import { getStoredAuthSession } from './authStorage';
 
-const BASE = '/api/v1/sdlc';
+const BASE = '/sdlc';
 
 export interface FeatureRequest {
   title: string;
@@ -19,45 +20,45 @@ export interface GateDecisionPayload {
 // ── IntentGate ────────────────────────────────────────────────────────────
 
 export const runIntentAgent = (projectId: string, featureRequest: FeatureRequest) =>
-  axios.post(`${BASE}/run-intent-agent`, { project_id: projectId, feature_request: featureRequest })
+  api.post(`${BASE}/run-intent-agent`, { project_id: projectId, feature_request: featureRequest })
     .then((r) => r.data);
 
 // ── Run Agents ────────────────────────────────────────────────────────────
 
-export const runPOAgent = (projectId: string, featureRequest: FeatureRequest, projectContext = {}) =>
-  axios.post(`${BASE}/run-po-agent`, { project_id: projectId, source_task_id: projectContext.intent_task_id || '', feature_request: featureRequest, project_context: projectContext })
+export const runPOAgent = (projectId: string, featureRequest: FeatureRequest, projectContext: any = {}) =>
+  api.post(`${BASE}/run-po-agent`, { project_id: projectId, source_task_id: projectContext.intent_task_id || '', feature_request: featureRequest, project_context: projectContext })
     .then((r) => r.data);
 
 export const runUXAgent = (sourceTaskId: string, feedbackPrompt = '') =>
-  axios.post(`${BASE}/run-ux-agent`, { source_task_id: sourceTaskId, feedback_prompt: feedbackPrompt })
+  api.post(`${BASE}/run-ux-agent`, { source_task_id: sourceTaskId, feedback_prompt: feedbackPrompt })
     .then((r) => r.data);
 
 export const runDEVAgent = (sourceTaskId: string, feedbackPrompt = '') =>
-  axios.post(`${BASE}/run-dev-agent`, { source_task_id: sourceTaskId, feedback_prompt: feedbackPrompt })
+  api.post(`${BASE}/run-dev-agent`, { source_task_id: sourceTaskId, feedback_prompt: feedbackPrompt })
     .then((r) => r.data);
 
 export const runQAAgent = (sourceTaskId: string, feedbackPrompt = '') =>
-  axios.post(`${BASE}/run-qa-agent`, { source_task_id: sourceTaskId, feedback_prompt: feedbackPrompt })
+  api.post(`${BASE}/run-qa-agent`, { source_task_id: sourceTaskId, feedback_prompt: feedbackPrompt })
     .then((r) => r.data);
 
 // ── HITL ──────────────────────────────────────────────────────────────────
 
 export const submitGateDecision = (taskId: string, payload: GateDecisionPayload) =>
-  axios.post(`${BASE}/tasks/${taskId}/gate-decision`, payload).then((r) => r.data);
+  api.post(`${BASE}/tasks/${taskId}/gate-decision`, payload).then((r) => r.data);
 
 // ── Status ────────────────────────────────────────────────────────────────
 
 export const getSdlcTaskStatus = (taskId: string) =>
-  axios.get(`${BASE}/tasks/${taskId}`).then((r) => r.data.data);
+  api.get(`${BASE}/tasks/${taskId}`).then((r) => r.data.data);
 
 export const getWorkflowStatus = (projectId: string) =>
-  axios.get(`${BASE}/workflow-status`, { params: { project_id: projectId } }).then((r) => r.data.data);
+  api.get(`${BASE}/workflow-status`, { params: { project_id: projectId } }).then((r) => r.data.data);
 
 export const getFinalReviewPacket = (projectId: string) =>
-  axios.get(`${BASE}/final-review-packet/${projectId}`).then((r) => r.data.data);
+  api.get(`${BASE}/final-review-packet/${projectId}`).then((r) => r.data.data);
 
 export const getAuditTrail = (projectId: string) =>
-  axios.get(`${BASE}/audit-trail/${projectId}`).then((r) => r.data.data);
+  api.get(`${BASE}/audit-trail/${projectId}`).then((r) => r.data.data);
 
 // ── SSE subscription (reuses same pattern as original API) ────────────────
 
@@ -73,7 +74,16 @@ export const subscribeTaskSSE = (
 
   (async () => {
     try {
-      const response = await fetch(`${BASE}/status/${taskId}`, { signal: abort.signal });
+      const session = getStoredAuthSession();
+      const headers: Record<string, string> = {};
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+
+      const response = await fetch(`/api/v1${BASE}/status/${taskId}`, { 
+        signal: abort.signal,
+        headers
+      });
       if (!response.body) return;
       const reader = response.body.getReader();
       const decoder = new TextDecoder();

@@ -22,7 +22,11 @@ You must configure the environment variables for each service.
 - **Frontend**: Copy `frontend/.env.example` to `frontend/.env`.
 - **Agents**: Copy `agents/.env.example` to `agents/.env` and provide your `OPENAI_API_KEY` (and `OPENAI_API_BASE` if using a custom gateway like Litellm).
 
-### 3. Running the Services
+### 3. Chế Độ Chạy Giả Lập Tiết Kiệm (Hybrid Mock Mode)
+Nếu bạn đang dev UI/UX ở Frontend và không muốn tốn tiền API (Token) cho các con AI Agent, bạn có thể bật chế độ giả lập. 
+Trong file `backend/.env`, chỉnh biến `USE_MOCK_AGENTS=true`. Hệ thống sẽ không gọi xuống cổng `8000` của Python nữa mà sẽ lấy data tĩnh trong thư mục `mock-data/` để trả về ngay lập tức cho Frontend.
+
+### 4. Running the Services
 
 You need three terminal windows to run the system:
 

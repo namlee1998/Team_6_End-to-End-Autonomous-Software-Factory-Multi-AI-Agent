@@ -64,6 +64,41 @@ class PipelineState(TypedDict, total=False):
 
 
 # =============================================================================
+# Utility Functions
+# =============================================================================
+
+def determine_fix_target(feedback: str) -> str:
+    """Analyze feedback keyword to route to the correct agent for targeted rework."""
+    import re
+    f = feedback.lower()
+    explicit = {
+        "po": ["po", "product owner", "prd", "requirement", "requirements", "acceptance criteria", "user story", "user stories", "scope"],
+        "ux": ["ux", "ui", "design", "wireframe", "user flow", "screen", "layout", "mockup", "figma"],
+        "dev": ["dev", "code", "implement", "css", "api", "backend", "frontend", "auth", "migration", "timeout", "performance", "service"],
+        "qa": ["qa", "test", "tests", "quality", "coverage", "test case", "test cases", "qa report", "retest"],
+    }
+
+    # Known demo bugs point at the agent that owns the root cause
+    if "bug-001" in f: return "ux_agent"
+    if "bug-002" in f: return "dev_agent"
+
+    def has_phrase(words):
+        return any(w in f for w in words)
+
+    def has_word(words):
+        return any(re.search(r'\b' + re.escape(w) + r'\b', f) for w in words)
+
+    if has_phrase(explicit["po"]): return "po_agent"
+    if has_phrase(explicit["ux"]): return "ux_agent"
+    if has_phrase(explicit["dev"]): return "dev_agent"
+    if has_word(explicit["qa"]) or "tc-" in f: return "qa_agent"
+
+    # Default fallback for generic bugs
+    if has_word(["bug", "blocker", "fail", "failed", "error", "issue"]): return "qa_agent"
+    return "dev_agent" # Default to DEV for generic code fixes
+
+
+# =============================================================================
 # Node Functions
 # =============================================================================
 
@@ -303,6 +338,13 @@ async def node_qa_agent(state: PipelineState) -> dict:
 
 def route_target(state: PipelineState) -> str:
     target = state.get("node_target", "")
+    
+    # If this is a rework request (e.g. from HITL gate), auto-route based on feedback
+    if target == "supervisor_rework":
+        ctx = state.get("context", {})
+        feedback = ctx.get("feedback_prompt", "")
+        return determine_fix_target(feedback)
+
     mapping = {
         "intent_node": "intent_agent",
         "po_agent": "po_agent",

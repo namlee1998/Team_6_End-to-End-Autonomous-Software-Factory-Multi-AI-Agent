@@ -26,7 +26,7 @@ from src.schemas import (
 from src.schemas.aidlc import FeatureRequest, IntentAgentInput
 from src.agents.intent_agent import run_intent_agent, stream_intent_agent
 from src.observability import create_trace_context, flush_observability
-from src.workflows.main_pipeline import get_graph
+from src.workflows.main_pipeline import get_graph, determine_fix_target
 
 load_dotenv(override=True)
 
@@ -161,6 +161,16 @@ async def _stream_agent(
 @app.get("/health")
 async def health():
     return {"status": "ok", "service": "ai-agents"}
+
+
+@app.post("/v1/agent/route-rework")
+async def route_rework(request: dict):
+    """
+    Analyze user feedback to determine which agent should be triggered for rework.
+    """
+    feedback = request.get("feedback_prompt", "")
+    target = determine_fix_target(feedback)
+    return {"target_agent": target}
 
 
 @app.post("/v1/agent/run")

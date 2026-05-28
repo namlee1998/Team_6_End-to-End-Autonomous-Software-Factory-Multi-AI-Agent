@@ -258,9 +258,46 @@ class SdlcWorkflowService {
 
     if (decision === 'APPROVE') {
       await Task.commitTask(taskId);
+    } else if (decision === 'REQUEST_CHANGES' && comment) {
+      // Trigger targeted rework automatically in the background
+      this.triggerRework({
+        projectId: task.projectId,
+        sourceTaskId: taskId,
+        feedbackPrompt: comment,
+        user
+      }).catch(err => console.error('[SDLC] Rework triggered by gate decision failed:', err));
     }
 
     return { task, hitlDecision: hitlRecord };
+  }
+
+  // =========================================================================
+  // Targeted Rework Logic
+  // =========================================================================
+
+  /**
+   * Evaluates the feedback via Python agents and triggers the appropriate agent.
+   */
+  async triggerRework({ projectId, sourceTaskId, feedbackPrompt, user }) {
+    console.log(`[SDLC] Triggering Rework for project ${projectId}. Feedback: "${feedbackPrompt}"`);
+    
+    // 1. Ask python Agent Server to analyze the feedback and route it
+    const targetAgent = await AgentService.routeRework(feedbackPrompt);
+    console.log(`[SDLC] Agent Server routed rework to: ${targetAgent}`);
+
+    // 2. Trigger the appropriate Agent based on the routing decision
+    if (targetAgent === 'po_agent') {
+      return this.runPOAgent({ projectId, sourceTaskId, feedbackPrompt, user });
+    } else if (targetAgent === 'ux_agent') {
+      return this.runUXAgent({ projectId, sourceTaskId, feedbackPrompt, user });
+    } else if (targetAgent === 'dev_agent') {
+      return this.runDEVAgent({ projectId, sourceTaskId, feedbackPrompt, user });
+    } else if (targetAgent === 'qa_agent') {
+      return this.runQAAgent({ projectId, sourceTaskId, feedbackPrompt, user });
+    } else {
+      console.warn(`[SDLC] Unrecognized rework target: ${targetAgent}. Defaulting to DEV.`);
+      return this.runDEVAgent({ projectId, sourceTaskId, feedbackPrompt, user });
+    }
   }
 
   // =========================================================================
@@ -473,7 +510,9 @@ class SdlcWorkflowService {
     if (user) await MembershipService.requireProjectRole(user.id, task.projectId, ['owner', 'admin', 'editor']);
     if (task.type !== expectedType) throw new ApiError(400, `Source task must be type: ${expectedType}`);
     if (task.status !== 'completed') throw new ApiError(400, 'Source task must be completed');
-    if (task.versionStatus !== 'committed') throw new ApiError(400, 'Source task must be approved (committed) before running next agent');
+    if (task.type !== 'intent-agent' && task.versionStatus !== 'committed') {
+      throw new ApiError(400, 'Source task must be approved (committed) before running next agent');
+    }
     return task;
   }
 
@@ -509,6 +548,38 @@ class SdlcWorkflowService {
    */
   async _runAgent(task, context, userId = null) {
     await Task.update(task.id, { status: 'processing' });
+
+    // Hybrid Mock Mode Bypass
+    if (process.env.USE_MOCK_AGENTS === 'true') {
+      try {
+        console.log(`[SDLC] Running in MOCK mode for agent ${task.type}`);
+        const mockDir = path.join(__dirname, '../../../mock-data', task.type);
+        const files = await fs.readdir(mockDir).catch(() => []);
+        
+        const completedData = {
+          summary: "Mock execution completed via Hybrid Mock Mode.",
+          token_usage: { input: 1250, output: 450 },
+          observability: { trace_id: "mock-trace-123" }
+        };
+
+        for (const file of files) {
+          if (!file.endsWith('.md') && !file.endsWith('.json')) continue;
+          const key = file.replace(/\.(md|json)$/, '');
+          const ext = path.extname(file);
+          const content = await fs.readFile(path.join(mockDir, file), 'utf8');
+          completedData[key] = ext === '.json' ? JSON.parse(content) : content;
+        }
+
+        // Simulate processing delay
+        await new Promise(r => setTimeout(r, 2000));
+        
+        await this._saveAgentData(task, completedData, userId);
+        return; // Bypass the real agent completely
+      } catch (err) {
+        console.error(`[SDLC._runAgent] Mock mode failed for task ${task.id}:`, err);
+        // Fallback to real agent if mock fails
+      }
+    }
 
     try {
       const response = await AgentService.runAgent({
@@ -550,67 +621,7 @@ class SdlcWorkflowService {
           if (agentError) throw new Error(agentError);
           if (!completedData) throw new Error('Agent returned no data');
 
-          // Save each artifact returned by the agent
-          const artifactRows = [];
-          const artifactTypes = ['intent_assumptions', 'clarifying_questions', 'prd', 'user_stories', 'acceptance_criteria', 'scope',
-            'ux_spec', 'user_flow', 'wireframe_spec', 'component_inventory',
-            'implementation_plan', 'mock_code_diff', 'changed_files', 'risk_assessment',
-            'test_cases', 'qa_report', 'ac_coverage_matrix'];
-
-          for (const artType of artifactTypes) {
-            if (completedData[artType]) {
-              const content = completedData[artType];
-              let fileRef = null;
-              
-              // BMAD File Handoff: write to physical file instead of saving huge text to DB
-              if (typeof content === 'string') {
-                fileRef = await this._writeArtifactToFile(task.projectId, task.id, `${artType}.md`, content);
-              } else {
-                fileRef = await this._writeArtifactToFile(task.projectId, task.id, `${artType}.json`, content);
-              }
-
-              artifactRows.push({
-                id: uuidv4(),
-                taskId: task.id,
-                projectId: task.projectId,
-                agentType: task.type,
-                artifactType: artType,
-                artifactKey: `${artType}:${task.id}`,
-                title: artType.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
-                contentText: typeof content === 'string' ? fileRef : null,
-                contentJson: typeof content === 'object' ? { file_path: fileRef.slice(5) } : null,
-                ordinal: artifactTypes.indexOf(artType),
-                contentHash: contentHash(content),
-              });
-            }
-          }
-
-          if (artifactRows.length > 0) {
-            await AgentArtifact.bulkUpsert(artifactRows);
-          }
-
-          const outputHash = contentHash(artifactRows.map((a) => a.contentHash));
-          await Task.update(task.id, {
-            status: 'completed',
-            output_content_hash: outputHash,
-            result: {
-              artifactCount: artifactRows.length,
-              agentType: task.type,
-              ...(completedData.summary ? { summary: completedData.summary } : {}),
-            },
-            observability: completedData.observability || {},
-          });
-
-          if (userId) {
-            QuotaService.recordUsage({
-              userId,
-              projectId: task.projectId,
-              taskId: task.id,
-              agentType: task.type,
-              tokenInput: completedData.token_usage?.input || 0,
-              tokenOutput: completedData.token_usage?.output || 0,
-            }).catch(() => {});
-          }
+          await this._saveAgentData(task, completedData, userId);
         } catch (err) {
           console.error(`[SDLC._runAgent] Failed for task ${task.id}:`, err);
           await Task.update(task.id, { status: 'failed', error: err.message });
@@ -622,6 +633,69 @@ class SdlcWorkflowService {
       });
     } catch (err) {
       await Task.update(task.id, { status: 'failed', error: err.message });
+    }
+  }
+
+  async _saveAgentData(task, completedData, userId) {
+    // Save each artifact returned by the agent
+    const artifactRows = [];
+    const artifactTypes = ['intent_assumptions', 'clarifying_questions', 'prd', 'user_stories', 'acceptance_criteria', 'scope',
+      'ux_spec', 'user_flow', 'wireframe_spec', 'component_inventory',
+      'implementation_plan', 'mock_code_diff', 'changed_files', 'risk_assessment',
+      'test_cases', 'qa_report', 'ac_coverage_matrix'];
+
+    for (const artType of artifactTypes) {
+      if (completedData[artType]) {
+        const content = completedData[artType];
+        let fileRef = null;
+        
+        if (typeof content === 'string') {
+          fileRef = await this._writeArtifactToFile(task.projectId, task.id, `${artType}.md`, content);
+        } else {
+          fileRef = await this._writeArtifactToFile(task.projectId, task.id, `${artType}.json`, content);
+        }
+
+        artifactRows.push({
+          id: uuidv4(),
+          taskId: task.id,
+          projectId: task.projectId,
+          agentType: task.type,
+          artifactType: artType,
+          artifactKey: `${artType}:${task.id}`,
+          title: artType.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
+          contentText: typeof content === 'string' ? fileRef : null,
+          contentJson: typeof content === 'object' ? { file_path: fileRef.slice(5) } : null,
+          ordinal: artifactTypes.indexOf(artType),
+          contentHash: contentHash(content),
+        });
+      }
+    }
+
+    if (artifactRows.length > 0) {
+      await AgentArtifact.bulkUpsert(artifactRows);
+    }
+
+    const outputHash = contentHash(artifactRows.map((a) => a.contentHash));
+    await Task.update(task.id, {
+      status: 'completed',
+      output_content_hash: outputHash,
+      result: {
+        artifactCount: artifactRows.length,
+        agentType: task.type,
+        ...(completedData.summary ? { summary: completedData.summary } : {}),
+      },
+      observability: completedData.observability || {},
+    });
+
+    if (userId) {
+      QuotaService.recordUsage({
+        userId,
+        projectId: task.projectId,
+        taskId: task.id,
+        agentType: task.type,
+        tokenInput: completedData.token_usage?.input || 0,
+        tokenOutput: completedData.token_usage?.output || 0,
+      }).catch(() => {});
     }
   }
 }

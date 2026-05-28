@@ -3,20 +3,16 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useTheme } from '@/theme';
 import { ProjectPanel } from './ProjectPanel';
-import { WorkflowStepper } from './WorkflowStepper';
-import { useWorkflowState, type StepId } from '@/hooks/useWorkflowState';
 import { useApiActions } from '@/hooks/useApiActions';
 import { useAppStore } from '@/store';
-import { DocumentManagement } from '@/pages/DocumentManagement';
-import { FlowAnalysis } from '@/pages/FlowAnalysis';
-import { TestScenarios } from '@/pages/TestScenarios';
-import { YamlExport } from '@/pages/YamlExport';
 import { ProfilePage } from '@/pages/Profile';
 import { ProjectSettings } from '@/pages/ProjectSettings';
 import { NotFoundPage } from '@/pages/NotFound';
 import { getProfile, listMyInvitations, acceptInvitation, type Profile, type ProjectInvitationItem } from '@/services/api';
 import { useQuotaStore } from '@/store/useQuotaStore';
 import { LanguageSwitcher } from '@/components/ui/LanguageSwitcher';
+import { useSdlcStore } from '@/store/useSdlcStore';
+import SdlcDashboard from '@/pages/SdlcDashboard';
 
 // ---------------------------------------------------------------------------
 // Invitations bell
@@ -171,6 +167,8 @@ function AppTopBar() {
   const navigate = useNavigate();
   const [profile, setProfile] = useState<Profile | null>(null);
   const fetchQuota = useQuotaStore((s) => s.fetch);
+  const { currentProjectId } = useAppStore();
+  const setFeatureRequestFormOpen = useSdlcStore((s) => s.setFeatureRequestFormOpen);
 
   useEffect(() => { void fetchQuota(); }, [fetchQuota]);
 
@@ -240,6 +238,16 @@ function AppTopBar() {
       </div>
 
       <div className="flex items-center gap-3">
+        <button
+          onClick={() => setFeatureRequestFormOpen(true)}
+          disabled={!currentProjectId}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary hover:bg-primary/90 text-on-primary text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-primary/20"
+          title={!currentProjectId ? "Vui lòng chọn một dự án từ Sidebar trước" : ""}
+        >
+          <span>🚀</span>
+          <span>New Feature Request</span>
+        </button>
+        <div className="w-px h-5 bg-outline-variant/30 mx-1" />
         <LanguageSwitcher />
         <QuotaBadge />
         <button
@@ -360,16 +368,6 @@ function CreateProjectDialog({
 }
 
 // ---------------------------------------------------------------------------
-// Step → Component mapping
-// ---------------------------------------------------------------------------
-const STEP_COMPONENTS: Record<StepId, React.ComponentType> = {
-  documents: DocumentManagement,
-  flows: FlowAnalysis,
-  scenarios: TestScenarios,
-  export: YamlExport,
-};
-
-// ---------------------------------------------------------------------------
 // AppShell
 // ---------------------------------------------------------------------------
 function QuotaWarningBanner() {
@@ -408,7 +406,6 @@ function QuotaWarningBanner() {
 }
 
 export const AppShell: React.FC = () => {
-  const workflow = useWorkflowState();
   const api = useApiActions();
   const {
     projects,
@@ -417,16 +414,17 @@ export const AppShell: React.FC = () => {
     fetchTree,
     setCurrentProject,
     upsertProject,
+    isCreateProjectDialogOpen,
+    setCreateProjectDialogOpen,
   } = useAppStore();
   const location = useLocation();
   const isProfileRoute = location.pathname === '/profile';
   const isProjectSettingsRoute = location.pathname.startsWith('/projects/') && location.pathname.endsWith('/settings');
-  const isUnknownAppRoute = location.pathname.startsWith('/app/') && location.pathname !== '/app/';
+  const isUnknownAppRoute = location.pathname.startsWith('/sdlc/') && location.pathname !== '/sdlc/' && location.pathname !== '/sdlc';
 
   const [panelCollapsed, setPanelCollapsed] = useState(() => {
     return localStorage.getItem('project-panel-collapsed') === 'true';
   });
-  const [showCreateDialog, setShowCreateDialog] = useState(false);
 
   const navigate = useNavigate();
 
@@ -444,7 +442,7 @@ export const AppShell: React.FC = () => {
     const res = await api.createProject(name);
     upsertProject(res.data);
     setCurrentProject(res.data.project_id);
-    setShowCreateDialog(false);
+    setCreateProjectDialogOpen(false);
     // errors propagate up to CreateProjectDialog which displays them inline
   }
 
@@ -460,7 +458,7 @@ export const AppShell: React.FC = () => {
           projects={panelProjects}
           activeProjectId={currentProjectId}
           onSelectProject={setCurrentProject}
-          onCreateProject={() => setShowCreateDialog(true)}
+          onCreateProject={() => setCreateProjectDialogOpen(true)}
           onOpenSettings={(id) => {
             setCurrentProject(id);
             navigate(`/projects/${id}/settings`);
@@ -478,32 +476,17 @@ export const AppShell: React.FC = () => {
             ) : isUnknownAppRoute ? (
               <NotFoundPage mode="panel" />
             ) : (
-              (Object.entries(STEP_COMPONENTS) as [StepId, React.ComponentType][]).map(
-                ([id, Component]) => (
-                  <div
-                    key={id}
-                    className={workflow.activeStep === id ? 'flex flex-col h-full' : 'hidden'}
-                  >
-                    <Component />
-                  </div>
-                ),
-              )
+              <div className="flex flex-col h-full bg-slate-950">
+                <SdlcDashboard />
+              </div>
             )}
           </div>
-
-          {!isProfileRoute && !isProjectSettingsRoute && !isUnknownAppRoute && (
-            <WorkflowStepper
-              steps={workflow.steps}
-              activeStep={workflow.activeStep}
-              onStepClick={workflow.setActiveStep}
-            />
-          )}
         </main>
       </div>
 
-      {showCreateDialog && (
+      {isCreateProjectDialogOpen && (
         <CreateProjectDialog
-          onCancel={() => setShowCreateDialog(false)}
+          onCancel={() => setCreateProjectDialogOpen(false)}
           onSubmit={handleCreateProject}
         />
       )}

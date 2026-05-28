@@ -3,7 +3,7 @@ import type { TaskStatus } from '@/services/api';
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
-export type AgentPhase = 'po' | 'ux' | 'dev' | 'qa';
+export type AgentPhase = 'intent' | 'po' | 'ux' | 'dev' | 'qa';
 export type GateDecision = 'APPROVE' | 'REJECT' | 'REQUEST_CHANGES';
 
 export interface Artifact {
@@ -76,6 +76,7 @@ interface SdlcState {
 
   // ── Audit Trail ───────────────────────────────────────────────────────
   auditEvents: AuditEvent[];
+  isFeatureRequestFormOpen: boolean;
 
   // ── Error ─────────────────────────────────────────────────────────────
   error: string | null;
@@ -91,6 +92,7 @@ interface SdlcState {
   setArtifacts: (artifacts: Artifact[]) => void;
   selectArtifact: (artifact: Artifact | null) => void;
   setAuditEvents: (events: AuditEvent[]) => void;
+  setFeatureRequestFormOpen: (isOpen: boolean) => void;
   setError: (msg: string | null) => void;
   clearTask: () => void;
 }
@@ -107,6 +109,7 @@ export const useSdlcStore = create<SdlcState>((set) => ({
   artifacts: [],
   selectedArtifact: null,
   auditEvents: [],
+  isFeatureRequestFormOpen: false,
   error: null,
 
   setProjectId: (id) => {
@@ -123,6 +126,7 @@ export const useSdlcStore = create<SdlcState>((set) => ({
   setArtifacts: (artifacts) => set({ artifacts }),
   selectArtifact: (artifact) => set({ selectedArtifact: artifact }),
   setAuditEvents: (events) => set({ auditEvents: events }),
+  setFeatureRequestFormOpen: (isOpen) => set({ isFeatureRequestFormOpen: isOpen }),
   setError: (msg) => set({ error: msg }),
   clearTask: () => set({ activeTaskId: null, activePhase: null, taskStatus: null, sseLogs: [], sseActive: false }),
 }));

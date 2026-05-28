@@ -103,6 +103,25 @@ class AgentService {
       throw new Error(`Failed to resolve unknowns: ${error.message}`);
     }
   }
+
+  /**
+   * Determine target agent for rework based on feedback
+   * @param {string} feedbackPrompt - The user feedback text
+   * @returns {Promise<string>} Target agent name
+   */
+  async routeRework(feedbackPrompt) {
+    try {
+      const response = await axios.post(
+        getAgentUrl('/v1/agent/route-rework'),
+        { feedback_prompt: feedbackPrompt },
+        { headers: { 'Content-Type': 'application/json' } }
+      );
+      return response.data.target_agent; // e.g. "ux_agent"
+    } catch (error) {
+      console.error('[AgentService] routeRework failed:', error.message);
+      return 'qa_agent'; // default fallback
+    }
+  }
 }
 
 module.exports = new AgentService();

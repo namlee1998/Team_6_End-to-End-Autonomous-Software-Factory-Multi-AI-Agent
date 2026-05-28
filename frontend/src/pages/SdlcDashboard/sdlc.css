@@ -8,7 +8,8 @@
   flex-direction: column;
   gap: 1.5rem;
   padding: 1.5rem;
-  min-height: 100vh;
+  height: 100%;
+  overflow-y: auto;
   background-color: #0b0c10;
   background-image: 
     radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
@@ -363,3 +364,125 @@ h1, h2, h3, .sdlc-title, .phase-card__label, .artifact-item__title {
   border: none; color: white; font-weight: 700; cursor: pointer;
 }
 .fr-btn-submit:disabled { opacity: .45; cursor: not-allowed; }
+
+/* ── Stage Inspector Architecture Flow ── */
+.arch-shell { display: block; flex-shrink: 0; width: 100%; overflow: visible; }
+.arch-panel { border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; background: rgba(255,255,255,0.018); overflow: hidden; }
+.arch-top { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.08); background: rgba(15,23,42,0.72); }
+.arch-title { font-size: 12px; font-weight: 800; color: #e2e8f0; text-transform: uppercase; letter-spacing: 0.05em; }
+.arch-sub { margin-left: auto; font-size: 11px; color: #64748b; }
+.arch-canvas { padding: 12px; overflow: auto; }
+.arch-flow { min-width: 700px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+
+.arch-node {
+  border: 1px solid rgba(148,163,184,0.14); border-radius: 8px;
+  background: rgba(15,23,42,0.82); padding: 9px 10px; min-height: 56px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.16); text-align: center;
+}
+.arch-node .node-title { font-size: 12px; font-weight: 800; color: #f8fafc; }
+.arch-node .node-sub { font-size: 10px; color: #64748b; margin-top: 4px; line-height: 1.35; }
+.arch-user, .arch-supervisor { width: 330px; }
+
+.arch-workers { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; width: 100%; }
+.arch-worker { position: relative; min-width: 150px; }
+
+.arch-connect { height: 28px; width: 100%; position: relative; }
+.arch-connect::before {
+  content: ''; position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; transform: translateX(-50%);
+  background: linear-gradient(180deg, rgba(168,85,247,0.65), rgba(148,163,184,0.2));
+}
+.arch-connect.fanout::after {
+  content: ''; position: absolute; left: 11%; right: 11%; bottom: 0; height: 2px;
+  background: linear-gradient(90deg, rgba(127,119,221,0.35), rgba(83,58,183,0.8), rgba(186,117,23,0.35));
+}
+
+.mcp-bus {
+  width: 100%; display: grid; grid-template-columns: repeat(5, 1fr); gap: 7px;
+  border: 1px dashed rgba(148,163,184,0.22); border-radius: 10px; padding: 10px;
+  background: rgba(15,23,42,0.55);
+}
+.mcp-title { grid-column: 1/-1; font-size: 11px; font-weight: 800; color: #cbd5e1; text-align: center; text-transform: uppercase; letter-spacing: 0.05em; }
+.mcp-chip { font-size: 10px; color: #94a3b8; text-align: center; padding: 5px 6px; border-radius: 6px; background: rgba(255,255,255,0.04); }
+
+.arch-outputs { width: 100%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.arch-output { border-color: rgba(148,163,184,0.12); text-align: center; min-height: 48px; }
+
+/* Replicate .ph-card styling for the Supervisor mock card since AgentPhaseCard isn't used for it */
+.ph-card {
+  background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 13px; padding: 13px; display: flex; flex-direction: column; gap: 8px;
+  transition: all 0.3s; position: relative; backdrop-filter: blur(10px); overflow: hidden;
+}
+.ph-card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  background: var(--pc, #6366f1); border-radius: 13px 13px 0 0; transition: all 0.3s;
+}
+.ph-supervisor { min-width: 330px; background: linear-gradient(135deg, rgba(168,85,247,0.05), rgba(192,132,252,0.02)); border-color: rgba(168,85,247,0.2); }
+.ph-supervisor.ph-active { border-color: rgba(168,85,247,0.5); box-shadow: 0 0 24px rgba(168,85,247,0.12); }
+.ph-hdr { display: flex; align-items: flex-start; gap: 8px; }
+.ph-icon { font-size: 18px; margin-top: 1px; }
+.ph-meta { flex: 1; min-width: 0; }
+.ph-label { font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 13px; letter-spacing: -0.01em; color: #fff; }
+.ph-gate { display: inline-flex; align-items: center; gap: 3px; margin-top: 3px; background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 4px; font-size: 9px; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; }
+.ph-badges { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; margin-left: auto; }
+
+/* ── Empty State ───────────────────────────────────────────────────────── */
+.sdlc-empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 400px;
+}
+.sdlc-empty-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 1rem;
+  padding: 3rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 24px;
+  backdrop-filter: blur(12px);
+  max-width: 500px;
+}
+.sdlc-empty-icon-wrap {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(139, 92, 246, 0.2));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 0.5rem;
+  box-shadow: 0 0 30px rgba(99, 102, 241, 0.2);
+}
+.sdlc-empty-icon {
+  color: #a5b4fc;
+}
+.sdlc-empty-content h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #fff;
+  margin: 0;
+}
+.sdlc-empty-content p {
+  color: #94a3b8;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  margin: 0;
+}
+.sdlc-empty-hint {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  padding: 0.75rem 1.25rem;
+  background: rgba(16, 185, 129, 0.1);
+  color: #34d399;
+  border-radius: 12px;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  font-size: 0.85rem;
+  font-weight: 500;
+}

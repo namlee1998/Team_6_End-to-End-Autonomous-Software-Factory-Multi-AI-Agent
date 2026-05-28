@@ -168,7 +168,7 @@ export function AuthPage() {
       return;
     }
 
-    navigate('/app');
+    navigate('/sdlc');
   }, [session, navigate]);
 
   useEffect(() => {
@@ -205,7 +205,7 @@ export function AuthPage() {
         });
         if (result.session) {
           setSession(result.session);
-          navigate('/app');
+          navigate('/sdlc');
         } else {
           setMode('success');
         }
@@ -213,7 +213,7 @@ export function AuthPage() {
         const result = await authActions.signInWithEmail({ email, password });
         if (!result.session) throw new Error('No active session returned');
         setSession(result.session);
-        navigate('/app');
+        navigate('/sdlc');
       }
     } catch (err: any) {
       setError(getFriendlyAuthError(err, 'Authentication failed'));

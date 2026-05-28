@@ -7,8 +7,6 @@ import { NotFoundPage } from '@/pages/NotFound';
 import { UpgradePlanPage } from '@/pages/UpgradePlan';
 import { AdminApp } from '@/pages/Admin';
 import { useAuthStore } from '@/store/useAuthStore';
-import SdlcDashboard from '@/pages/SdlcDashboard';
-
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { session, isInitialized } = useAuthStore();
 
@@ -48,8 +46,11 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+        <Route path="/app/*" element={<Navigate to="/sdlc" replace />} />
+        
+        {/* ── AIDLC Control Platform ── */}
         <Route
-          path="/app/*"
+          path="/sdlc/*"
           element={
             <ProtectedRoute>
               <AppShell />
@@ -72,15 +73,7 @@ export default function App() {
             </ProtectedRoute>
           }
         />
-        {/* ── AIDLC Control Platform ── */}
-        <Route
-          path="/sdlc"
-          element={
-            <ProtectedRoute>
-              <SdlcDashboard />
-            </ProtectedRoute>
-          }
-        />
+
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </Router>

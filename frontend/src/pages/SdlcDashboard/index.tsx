@@ -5,10 +5,12 @@ import { useSdlcStore } from '@/store/useSdlcStore';
 import * as sdlcApi from '@/services/api/sdlcApi';
 import { useAppStore } from '@/store/useAppStore';
 import AgentPhaseCard from './components/AgentPhaseCard';
+import StageInspector from './components/StageInspector';
 import HumanGatePanel from './components/HumanGatePanel';
 import ArtifactViewer from './components/ArtifactViewer';
 import AuditTimeline from './components/AuditTimeline';
 import FeatureRequestForm from './components/FeatureRequestForm';
+import EmptyProjectState from './components/EmptyProjectState';
 
 
 const PHASES = [
@@ -20,24 +22,28 @@ const PHASES = [
 ] as const;
 
 export default function SdlcDashboard() {
-  const { currentProjectId } = useAppStore();
+  const { currentProjectId, treeLoaded, fetchTree } = useAppStore();
   const {
     projectId, workflowStatus, workflowLoading, activeTaskId, activePhase,
     sseLogs, sseActive, artifacts, selectedArtifact, auditEvents,
     setProjectId, setWorkflowStatus, setWorkflowLoading,
     setActiveTask, appendSseLog, setSseActive, setArtifacts,
     selectArtifact, setAuditEvents, setError,
+    isFeatureRequestFormOpen, setFeatureRequestFormOpen,
   } = useSdlcStore();
 
-  const [showForm, setShowForm]         = useState(false);
   const [gateTaskId, setGateTaskId]     = useState<string | null>(null);
   const [sseAbort, setSseAbort]         = useState<AbortController | null>(null);
   const [panel, setPanel]               = useState<'artifacts' | 'audit'>('artifacts');
 
-  // Sync project
   useEffect(() => {
     if (currentProjectId && currentProjectId !== projectId) setProjectId(currentProjectId);
   }, [currentProjectId]);
+
+  // Load project if visited directly
+  useEffect(() => {
+    if (!treeLoaded) void fetchTree();
+  }, [treeLoaded, fetchTree]);
 
   // Load workflow status on mount / projectId change
   const refreshStatus = useCallback(async () => {
@@ -78,10 +84,10 @@ export default function SdlcDashboard() {
 
   // Run handlers
   const handleRunIntent = async (fr: sdlcApi.FeatureRequest) => {
+    setFeatureRequestFormOpen(false);
     if (!projectId) return;
     const res = await sdlcApi.runIntentAgent(projectId, fr);
     startSSE(res.task_id, 'intent');
-    setShowForm(false);
   };
 
   const handleRunNext = async (phase: typeof PHASES[number]['key'], sourceTaskId: string, feedbackPrompt?: string) => {
@@ -111,104 +117,59 @@ export default function SdlcDashboard() {
     setPanel('artifacts');
   };
 
-  const phases = workflowStatus?.phases;
-
   return (
     <div className="sdlc-dashboard">
-      {/* ── Header ─────────────────────────────────────────────────── */}
-      <div className="sdlc-header">
-        <div>
-          <h1 className="sdlc-title">🏭 AIDLC Control Platform</h1>
-          <p className="sdlc-subtitle">End-to-End Autonomous Software Factory</p>
-        </div>
-        <div className="sdlc-header-actions">
-          {workflowStatus?.currentPhase && (
-            <span className="sdlc-phase-badge">{workflowStatus.currentPhase.replace(/_/g, ' ')}</span>
-          )}
-          <button className="sdlc-btn-primary" onClick={() => setShowForm(true)}>
-            + New Feature Request
-          </button>
-        </div>
-      </div>
+      {!projectId ? (
+        <EmptyProjectState />
+      ) : (
+        <>
+          {/* ── Architecture Pipeline (Stage Inspector) ────────────────── */}
+          <div className="sdlc-pipeline" style={{ paddingTop: '10px' }}>
+            <StageInspector
+              onRunIntent={() => setFeatureRequestFormOpen(true)}
+              onRunNext={handleRunNext as any}
+              onOpenGate={(taskId) => setGateTaskId(taskId)}
+              onViewArtifacts={handleViewArtifacts}
+              sseLogs={sseLogs}
+              activePhase={activePhase}
+              sseActive={sseActive}
+            />
+          </div>
 
-      {/* ── Pipeline ────────────────────────────────────────────────── */}
-      <div className="sdlc-pipeline">
-        {PHASES.map((phase, idx) => {
-          const phaseData = phases?.[phase.key] ?? null;
-          const prevPhaseData = idx > 0 ? phases?.[PHASES[idx - 1].key] : null;
-          const isUnlocked = idx === 0 || (prevPhaseData?.hitlDecision?.decision === 'APPROVE');
-          
-          // Connectors logic
-          const showConnector = idx > 0;
-          const isConnectorActive = isUnlocked;
-          const isRework = phaseData?.hitlDecision?.decision === 'REQUEST_CHANGES' || phaseData?.hitlDecision?.decision === 'REJECT';
+          {/* ── Bottom panel ─────────────────────────────────────────────── */}
+          <div className="sdlc-bottom">
+            <div className="sdlc-panel-tabs">
+              <button className={`sdlc-tab ${panel === 'artifacts' ? 'active' : ''}`} onClick={() => setPanel('artifacts')}>📄 Artifacts</button>
+              <button className={`sdlc-tab ${panel === 'audit' ? 'active' : ''}`} onClick={() => setPanel('audit')}>📜 Audit Trail</button>
+            </div>
 
-          return (
-            <Fragment key={phase.key}>
-              {showConnector && (
-                <div className="sdlc-connector-wrapper">
-                  <div className={`sdlc-connector ${isConnectorActive ? 'sdlc-connector--active' : ''}`} />
-                  {isRework && (
-                    <svg className="sdlc-connector-rework" preserveAspectRatio="none">
-                       {/* This is handled purely by CSS dashed borders now */}
-                    </svg>
-                  )}
-                </div>
+            <AnimatePresence mode="wait">
+              {panel === 'artifacts' ? (
+                <motion.div key="artifacts" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                  className="sdlc-panel-content">
+                  <ArtifactViewer
+                    artifacts={artifacts}
+                    selected={selectedArtifact}
+                    onSelect={selectArtifact}
+                  />
+                </motion.div>
+              ) : (
+                <motion.div key="audit" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                  className="sdlc-panel-content">
+                  <AuditTimeline events={auditEvents} />
+                </motion.div>
               )}
-              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: idx * 0.1 }}
-                style={{ flex: 1, minWidth: 0 }}>
-                <AgentPhaseCard
-                phase={phase}
-                phaseData={phaseData}
-                isUnlocked={isUnlocked}
-                isActive={activePhase === phase.key && sseActive}
-                sseLogs={activePhase === phase.key ? sseLogs : []}
-                onRun={idx === 0
-                  ? () => setShowForm(true) // For Intent, we show form again? Actually if rework, we shouldn't show form but run intent with comment. But feature request form can have feedback. Let's just let them fill form.
-                  : () => { if (prevPhaseData?.taskId) handleRunNext(phase.key, prevPhaseData.taskId, phaseData?.hitlDecision?.comment); }
-                }
-                onOpenGate={() => { if (phaseData?.taskId) setGateTaskId(phaseData.taskId); }}
-                onViewArtifacts={() => { if (phaseData?.taskId) handleViewArtifacts(phaseData.taskId); }}
-              />
-              </motion.div>
-            </Fragment>
-          );
-        })}
-      </div>
-
-      {/* ── Bottom panel ─────────────────────────────────────────────── */}
-      <div className="sdlc-bottom">
-        <div className="sdlc-panel-tabs">
-          <button className={`sdlc-tab ${panel === 'artifacts' ? 'active' : ''}`} onClick={() => setPanel('artifacts')}>📄 Artifacts</button>
-          <button className={`sdlc-tab ${panel === 'audit' ? 'active' : ''}`} onClick={() => setPanel('audit')}>📜 Audit Trail</button>
-        </div>
-
-        <AnimatePresence mode="wait">
-          {panel === 'artifacts' ? (
-            <motion.div key="artifacts" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="sdlc-panel-content">
-              <ArtifactViewer
-                artifacts={artifacts}
-                selected={selectedArtifact}
-                onSelect={selectArtifact}
-              />
-            </motion.div>
-          ) : (
-            <motion.div key="audit" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="sdlc-panel-content">
-              <AuditTimeline events={auditEvents} />
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+            </AnimatePresence>
+          </div>
+        </>
+      )}
 
       {/* ── Feature Request Modal ────────────────────────────────────── */}
       <AnimatePresence>
-        {showForm && (
+        {isFeatureRequestFormOpen && projectId && (
           <motion.div className="sdlc-modal-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <motion.div className="sdlc-modal" initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}>
-              <FeatureRequestForm onSubmit={handleRunIntent} onCancel={() => setShowForm(false)} />
+              <FeatureRequestForm onSubmit={handleRunIntent} onCancel={() => setFeatureRequestFormOpen(false)} />
             </motion.div>
           </motion.div>
         )}
