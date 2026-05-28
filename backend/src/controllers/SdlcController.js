@@ -1,5 +1,4 @@
 const SdlcWorkflowService = require('../services/SdlcWorkflowService');
-const WorkflowController = require('./WorkflowController'); // reuse streamStatus
 
 class SdlcController {
   // ─── IntentGate ──────────────────────────────────────────────────────────
@@ -143,9 +142,77 @@ class SdlcController {
     } catch (err) { next(err); }
   }
 
-  // Reuse WorkflowController.streamStatus for SSE (identical SSE protocol)
-  streamStatus(req, res, next) {
-    return WorkflowController.streamStatus(req, res, next);
+  async streamStatus(req, res, next) {
+    try {
+      const { task_id } = req.params;
+
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      res.flushHeaders?.();
+
+      const sendEvent = (event, data) => {
+        res.write(`event: ${event}\n`);
+        res.write(`data: ${JSON.stringify(data)}\n\n`);
+      };
+
+      sendEvent('progress', {
+        step: 'connected',
+        log: 'Connected to SDLC task stream...',
+      });
+
+      const heartbeatInterval = setInterval(() => {
+        res.write(': heartbeat\n\n');
+      }, 15000);
+
+      let pollInterval;
+      const stopAll = () => {
+        clearInterval(pollInterval);
+        clearInterval(heartbeatInterval);
+      };
+
+      pollInterval = setInterval(async () => {
+        try {
+          const task = await SdlcWorkflowService.getTaskStatus(task_id, req.user);
+
+          if (!task) {
+            sendEvent('error', { message: 'Task not found' });
+            stopAll(); res.end(); return;
+          }
+
+          if (task.status === 'completed') {
+            sendEvent('completed', {
+              ...task.result,
+              artifacts: task.artifacts || [],
+              hitlDecision: task.hitlDecision || null,
+            });
+            stopAll(); res.end(); return;
+          }
+
+          if (task.status === 'failed') {
+            sendEvent('error', { message: task.error || 'Task failed' });
+            stopAll(); res.end(); return;
+          }
+
+          sendEvent('progress', {
+            step: task.type,
+            status: task.status,
+            log: `Processing: ${task.type}`,
+          });
+        } catch (error) {
+          sendEvent('error', { message: error.message });
+          stopAll();
+          res.end();
+        }
+      }, 2000);
+
+      req.on('close', () => {
+        stopAll();
+        res.end();
+      });
+    } catch (err) {
+      next(err);
+    }
   }
 
   async getWorkflowStatus(req, res, next) {

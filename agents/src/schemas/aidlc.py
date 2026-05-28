@@ -123,10 +123,13 @@ class DEVAgentInput(BaseModel):
 class DEVAgentOutput(BaseModel):
     architecture_ledger_update: str = Field(default="", description="Những thay đổi kiến trúc sau Story này")
     implementation_plan: str = Field(default="", description="Step-by-step plan — markdown")
-    mock_code_diff: str = Field(default="", description="Mock diff — markdown fenced code block")
+    mock_code_diff: str = Field(default="", description="Unified git diff under the legacy field name")
     changed_files: list[ChangedFile] = Field(default_factory=list)
     risk_assessment: str = Field(default="", description="Risk level LOW/MEDIUM/HIGH + reasoning — markdown")
     risk_level: str = Field(default="LOW", description="LOW | MEDIUM | HIGH")
+    sandbox_report: str = Field(default="")
+    patch_branch: str = Field(default="")
+    patch_commit: str = Field(default="")
     summary: str = Field(default="")
 
 # =============================================================================
@@ -155,6 +158,7 @@ class QAAgentInput(BaseModel):
     ux_spec: str = Field(default="")
     implementation_plan: str = Field(default="")
     mock_code_diff: str = Field(default="")
+    sandbox_report: str = Field(default="")
     risk_assessment: str = Field(default="")
     risk_level: str = Field(default="LOW")
     feedback_prompt: str = Field(default="")

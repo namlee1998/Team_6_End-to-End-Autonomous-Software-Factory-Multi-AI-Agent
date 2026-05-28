@@ -1,5 +1,5 @@
 """
-DEV Agent — Implementation Plan, Mock Code Diff, Changed Files, Risk Assessment.
+DEV Agent - Implementation Plan, Code Patch, Changed Files, Risk Assessment.
 """
 from __future__ import annotations
 import json, logging, os, re
@@ -10,16 +10,11 @@ from src.schemas.aidlc import DEVAgentInput, DEVAgentOutput, ChangedFile
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = """You are a senior software engineer reviewing a feature implementation request.
+SYSTEM_PROMPT = """You are a senior software engineer implementing a feature request.
 Given a PRD, UX Spec, and an existing Architecture Ledger, produce:
 1. architecture_ledger_update — A concise summary of architectural changes introduced by this implementation (e.g. new tables, new core functions, new dependencies).
 2. implementation_plan — Step-by-step markdown plan
-3. mock_code_diff — Code patch in Search/Replace Block format (NOT unified diff). Example:
-<<<<
-old code
-====
-new code
->>>>
+3. mock_code_diff — A unified git diff compatible with `git apply --check`. Keep this legacy key name, but the content MUST be a real unified diff beginning with `diff --git`.
 4. changed_files — Array of {path, reason, change_type: add/modify/delete}
 5. risk_assessment — Markdown risk analysis (LOW/MEDIUM/HIGH + factors + mitigation)
 6. risk_level — "LOW" | "MEDIUM" | "HIGH". Rule: auth/DB/security/payment → HIGH
@@ -74,6 +69,8 @@ async def run_dev_agent(input_data: DEVAgentInput, model_config=None, trace_cont
                           implementation_plan=p.get("implementation_plan",""),
                           mock_code_diff=p.get("mock_code_diff",""), changed_files=files,
                           risk_assessment=p.get("risk_assessment",""), risk_level=p.get("risk_level","LOW"),
+                          sandbox_report=p.get("sandbox_report",""), patch_branch=p.get("patch_branch",""),
+                          patch_commit=p.get("patch_commit",""),
                           summary=p.get("summary","DEV Agent completed"))
 
 async def stream_dev_agent(input_data: DEVAgentInput, model_config=None, trace_context=None):
@@ -114,8 +111,16 @@ async def stream_dev_agent(input_data: DEVAgentInput, model_config=None, trace_c
         
         parsed = _parse(full)
         
-        # Run Sandbox
-        report = run_sandbox_test(parsed.get("implementation_plan", ""), parsed.get("mock_code_diff", ""))
+        report = run_sandbox_test(
+            parsed.get("implementation_plan", ""),
+            parsed.get("mock_code_diff", ""),
+            session_id=getattr(trace_context, "session_id", None),
+        )
+        parsed["sandbox_report"] = report.get("report", "")
+        if report.get("patch_branch"):
+            parsed["patch_branch"] = report["patch_branch"]
+        if report.get("patch_commit"):
+            parsed["patch_commit"] = report["patch_commit"]
         
         if report["success"]:
             yield {"event": "progress", "data": {"step": "sandbox_gate", "token": f"\n\n{report['report']}\n"}}
@@ -124,7 +129,7 @@ async def stream_dev_agent(input_data: DEVAgentInput, model_config=None, trace_c
             
         # Sandbox failed
         yield {"event": "progress", "data": {"step": "sandbox_gate", "token": f"\n\n{report['report']}\n"}}
-        base_content += f"\n\n[SYSTEM] Sandbox execution failed. Error:\n{report['report']}\nPlease fix your implementation."
+        base_content += f"\n\n[SYSTEM] Sandbox execution failed. Error:\n{report['report']}\nPlease fix your unified git diff."
         retries += 1
         
     # If we reached here, max retries exceeded
