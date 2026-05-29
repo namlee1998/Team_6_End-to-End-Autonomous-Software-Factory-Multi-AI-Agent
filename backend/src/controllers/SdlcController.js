@@ -240,6 +240,43 @@ class SdlcController {
       return res.json({ status: 'success', data: trail });
     } catch (err) { next(err); }
   }
+
+  // ─── Kanban Backlog ──────────────────────────────────────────────────────
+
+  async getBacklogs(req, res, next) {
+    try {
+      const { project_id } = req.params;
+      const FeatureBacklog = require('../models/FeatureBacklog');
+      const backlogs = await FeatureBacklog.findByProjectId(project_id);
+      return res.json({ status: 'success', data: backlogs });
+    } catch (err) { next(err); }
+  }
+
+  async createBacklog(req, res, next) {
+    try {
+      const { project_id } = req.params;
+      const { title, description, priority } = req.body;
+      const FeatureBacklog = require('../models/FeatureBacklog');
+      const record = await FeatureBacklog.create({
+        project_id,
+        title,
+        description,
+        priority: priority || 'MEDIUM',
+        status: 'TODO'
+      });
+      return res.status(201).json({ status: 'success', data: record });
+    } catch (err) { next(err); }
+  }
+
+  async moveBacklog(req, res, next) {
+    try {
+      const { id } = req.params;
+      const { status } = req.body;
+      const FeatureBacklog = require('../models/FeatureBacklog');
+      const record = await FeatureBacklog.updateStatus(id, status);
+      return res.json({ status: 'success', data: record });
+    } catch (err) { next(err); }
+  }
 }
 
 module.exports = new SdlcController();

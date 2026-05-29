@@ -59,7 +59,7 @@ Ví dụ `tasks.result` sau refactor:
 {
   "yamlCount": 36,
   "summary": "Generated 36 automation scripts.",
-  "framework": "Mobile Auto Platform"
+  "framework": "AIDLC Auto Platform"
 }
 ```
 
@@ -276,7 +276,7 @@ Request chính:
 ```json
 {
   "task_id": "agent-2-task-id",
-  "framework": "Mobile Auto Platform",
+  "framework": "AIDLC Auto Platform",
   "feedback_prompt": "optional",
   "selected_scenario_ids": ["TC_LOGIN_001"],
   "previous_task_id": "optional-agent-3-task-id"
@@ -309,7 +309,7 @@ Sau đó gửi sang agents service:
     }
   ],
   "ui_description": "",
-  "framework": "Mobile Auto Platform",
+  "framework": "AIDLC Auto Platform",
   "feedback_prompt": "..."
 }
 ```
@@ -337,7 +337,7 @@ Artifact được ghi:
 - `artifact_type = yaml`
 - `artifact_key`: filename bỏ `.yaml`
 - `title`: filename
-- `content_json`: `{ "filename": "...", "framework": "Mobile Auto Platform" }`
+- `content_json`: `{ "filename": "...", "framework": "AIDLC Auto Platform" }`
 - `content_text`: YAML content
 
 Partial rerun:
@@ -352,7 +352,7 @@ Partial rerun:
 {
   "yamlCount": 36,
   "summary": "Generated 36 automation scripts.",
-  "framework": "Mobile Auto Platform"
+  "framework": "AIDLC Auto Platform"
 }
 ```
 

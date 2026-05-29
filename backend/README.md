@@ -1,6 +1,6 @@
 # Backend Gateway
 
-Backend server cho hệ thống **Mobile Auto Testcase Generator**. Đóng vai trò là Gateway/Orchestrator giữa Frontend và AI Agents, sử dụng **Supabase** làm Database và Storage.
+Backend server cho hệ thống **AIDLC Auto Testcase Generator**. Đóng vai trò là Gateway/Orchestrator giữa Frontend và AI Agents, sử dụng **Supabase** làm Database và Storage.
 
 ## Kiến trúc
 
@@ -35,8 +35,6 @@ src/
 └── server.js              # Express app entry point
 ```
 
-
-
 ## Cài đặt
 
 ```bash
@@ -50,8 +48,6 @@ Copy `.env.example` thành `.env` và điền thông tin Supabase:
 ```bash
 cp .env.example .env
 ```
-
-
 
 ```env
 # Server

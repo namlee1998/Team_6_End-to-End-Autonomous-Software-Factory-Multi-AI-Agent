@@ -217,7 +217,7 @@ function AppTopBar() {
       <div className="flex items-center gap-3">
         <img src="/favicon.svg" alt="logo" className="w-7 h-7" />
         <span className="font-headline font-bold text-sm text-on-surface">
-          Mobile Auto
+          AIDLC Platform
         </span>
         <span className="text-[10px] font-label text-on-surface-variant bg-surface-container px-2 py-0.5 rounded-full border border-outline-variant/30">
           v1.2.4
@@ -449,7 +449,7 @@ export const AppShell: React.FC = () => {
   const panelProjects = projects.map((p) => ({ id: p.project_id, name: p.name, role: p.role }));
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden bg-background">
+    <div className="h-screen flex flex-col overflow-hidden bg-background dark">
       <AppTopBar />
       <QuotaWarningBanner />
 

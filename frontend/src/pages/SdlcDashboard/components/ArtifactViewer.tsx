@@ -22,6 +22,9 @@ const PHASE_COLORS: Record<string, string> = {
 
 export default function ArtifactViewer({ artifacts, selected, onSelect }: Props) {
   const [filter, setFilter] = useState<string>('all');
+  const [isEditing, setIsEditing] = useState(false);
+  const [editContent, setEditContent] = useState('');
+  
   const phases = ['all', 'po-agent', 'ux-agent', 'dev-agent', 'qa-agent'];
   const filtered = filter === 'all' ? artifacts : artifacts.filter((a) => a.phase === filter);
 
@@ -40,6 +43,29 @@ export default function ArtifactViewer({ artifacts, selected, onSelect }: Props)
   };
 
   const renderContent = (art: Artifact) => {
+    if (isEditing) {
+      return (
+        <div className="flex flex-col h-full gap-2">
+          <textarea
+            value={editContent}
+            onChange={(e) => setEditContent(e.target.value)}
+            className="w-full h-full p-4 text-sm font-mono bg-surface-container-low border border-outline-variant/30 rounded-xl outline-none focus:border-primary resize-none"
+          />
+          <div className="flex justify-end gap-2 p-2 bg-surface-container/50 border-t border-outline-variant/30">
+            <button onClick={() => setIsEditing(false)} className="px-3 py-1.5 text-xs font-bold text-on-surface-variant hover:bg-surface-container-high rounded-lg transition-colors">Hủy</button>
+            <button onClick={() => {
+              // Optimistic save (in real app, call API here)
+              if (art.contentText) art.contentText = editContent;
+              if (art.contentJson) {
+                try { art.contentJson = JSON.parse(editContent); } catch(e) {}
+              }
+              setIsEditing(false);
+            }} className="px-3 py-1.5 text-xs font-bold text-on-primary bg-primary hover:bg-primary/90 rounded-lg transition-colors shadow-md">Lưu & Approve Gate</button>
+          </div>
+        </div>
+      );
+    }
+    
     if (art.contentText) {
       return (
         <div className="artifact-markdown">
@@ -90,14 +116,30 @@ export default function ArtifactViewer({ artifacts, selected, onSelect }: Props)
       <div className="artifact-content">
         {selected ? (
           <>
-            <div className="artifact-content__header">
-              <h3>{TYPE_ICONS[selected.type]} {selected.title}</h3>
-              <span className="artifact-content__phase"
-                style={{ background: PHASE_COLORS[selected.phase] || '#6b7280' }}>
-                {selected.phase}
-              </span>
+            <div className="artifact-content__header flex justify-between items-center pr-4">
+              <div className="flex items-center gap-3">
+                <h3>{TYPE_ICONS[selected.type]} {selected.title}</h3>
+                <span className="artifact-content__phase"
+                  style={{ background: PHASE_COLORS[selected.phase] || '#6b7280' }}>
+                  {selected.phase}
+                </span>
+              </div>
+              {!isEditing && (
+                <button 
+                  onClick={() => {
+                    setEditContent(selected.contentText || (selected.contentJson ? JSON.stringify(selected.contentJson, null, 2) : ''));
+                    setIsEditing(true);
+                  }}
+                  className="px-3 py-1 rounded-lg text-xs font-bold bg-primary/10 text-primary hover:bg-primary/20 transition-colors flex items-center gap-1"
+                >
+                  <span className="material-symbols-outlined text-[14px]">edit</span>
+                  Edit / Groom
+                </button>
+              )}
             </div>
-            <div className="artifact-content__body">{renderContent(selected)}</div>
+            <div className={`artifact-content__body ${isEditing ? 'p-0 overflow-hidden flex-1 flex flex-col' : ''}`}>
+              {renderContent(selected)}
+            </div>
           </>
         ) : (
           <div className="artifact-content__placeholder">

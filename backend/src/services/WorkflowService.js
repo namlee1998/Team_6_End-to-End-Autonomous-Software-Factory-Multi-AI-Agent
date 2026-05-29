@@ -35,11 +35,11 @@ function yamlArtifactKey(file, index) {
 function observabilityFromFailure(source, error) {
   const base = source || {};
   return {
-    provider: base.provider || 'langfuse',
+    provider: base.provider || "langfuse",
     session_id: base.session_id || null,
     trace_url: base.trace_url || null,
     failed_at: base.failed_at || new Date().toISOString(),
-    error: error?.message || String(error || 'Unknown error'),
+    error: error?.message || String(error || "Unknown error"),
     ...(base.model ? { model: base.model } : {}),
     ...(base.started_at ? { started_at: base.started_at } : {}),
     ...(base.latency_ms ? { latency_ms: base.latency_ms } : {}),
@@ -48,7 +48,9 @@ function observabilityFromFailure(source, error) {
 
 function artifactsToTestcases(artifacts = []) {
   return artifacts
-    .filter((artifact) => artifact.artifactType === "scenario" || artifact.artifactType === "yaml")
+    .filter((artifact) =>
+      artifact.artifactType === "scenario" || artifact.artifactType === "yaml"
+    )
     .map((artifact) => {
       if (artifact.artifactType === "scenario") {
         const scenario = artifact.contentJson || {};
@@ -57,7 +59,8 @@ function artifactsToTestcases(artifacts = []) {
           taskId: artifact.taskId,
           projectId: artifact.projectId,
           featureName: scenario.feature_name || "Unknown",
-          flowName: scenario.flow_name || scenario.name || artifact.title || "Unknown",
+          flowName: scenario.flow_name || scenario.name || artifact.title ||
+            "Unknown",
           scenarioData: scenario,
           automationYaml: null,
           yamlFilename: null,
@@ -75,7 +78,8 @@ function artifactsToTestcases(artifacts = []) {
         flowName: "automation",
         scenarioData: null,
         automationYaml: artifact.contentText,
-        yamlFilename: meta.filename || artifact.title || `${artifact.artifactKey}.yaml`,
+        yamlFilename: meta.filename || artifact.title ||
+          `${artifact.artifactKey}.yaml`,
         createdAt: artifact.createdAt,
         updatedAt: artifact.updatedAt,
       };
@@ -93,7 +97,9 @@ function buildTaskResultForClient(task, artifacts = []) {
   const summary = task.result || {};
 
   if (task.type === "extract-flows") {
-    const rawMarkdownArtifact = artifacts.find((artifact) => artifact.artifactType === "raw_markdown");
+    const rawMarkdownArtifact = artifacts.find((artifact) =>
+      artifact.artifactType === "raw_markdown"
+    );
     return {
       ...summary,
       flows: flowArtifactsToFlows(artifacts),
@@ -116,7 +122,8 @@ function buildTaskResultForClient(task, artifacts = []) {
     const yamlFiles = artifacts
       .filter((artifact) => artifact.artifactType === "yaml")
       .map((artifact) => ({
-        filename: artifact.contentJson?.filename || artifact.title || `${artifact.artifactKey}.yaml`,
+        filename: artifact.contentJson?.filename || artifact.title ||
+          `${artifact.artifactKey}.yaml`,
         content: artifact.contentText || "",
       }));
     return {
@@ -162,20 +169,31 @@ class WorkflowService {
    * @param {string} data.promptProfile - Prompt profile to use
    * @returns {Promise<Object>} Task record
    */
-  async extractFlows({ projectId, documentIds, promptProfile, feedbackPrompt = '', user }) {
+  async extractFlows(
+    { projectId, documentIds, promptProfile, feedbackPrompt = "", user },
+  ) {
     if (user) {
-      await MembershipService.requireProjectRole(user.id, projectId, ['owner', 'admin', 'editor']);
+      await MembershipService.requireProjectRole(user.id, projectId, [
+        "owner",
+        "admin",
+        "editor",
+      ]);
       for (const documentId of documentIds || []) {
         const document = await Document.findById(documentId);
-        if (!document) throw new ApiError(404, `Document not found: ${documentId}`);
+        if (!document) {
+          throw new ApiError(404, `Document not found: ${documentId}`);
+        }
         if (document.projectId !== projectId) {
-          throw new ApiError(400, 'document_ids must belong to project_id');
+          throw new ApiError(400, "document_ids must belong to project_id");
         }
       }
     }
 
     // Hash the input so downstream agents can detect staleness
-    const inputHash = contentHash({ documentIds: [...documentIds].sort(), promptProfile: promptProfile || "" });
+    const inputHash = contentHash({
+      documentIds: [...documentIds].sort(),
+      promptProfile: promptProfile || "",
+    });
 
     const task = await Task.create({
       id: uuidv4(),
@@ -188,9 +206,10 @@ class WorkflowService {
     });
 
     // Trigger agent asynchronously (don't await)
-    this._runAgent1Extraction(task, documentIds, feedbackPrompt, user?.id).catch((error) => {
-      console.error("[WorkflowService] Agent 1 extraction failed:", error);
-    });
+    this._runAgent1Extraction(task, documentIds, feedbackPrompt, user?.id)
+      .catch((error) => {
+        console.error("[WorkflowService] Agent 1 extraction failed:", error);
+      });
 
     return task;
   }
@@ -207,7 +226,13 @@ class WorkflowService {
     if (!task) {
       throw new Error("Task not found");
     }
-    if (user) await MembershipService.requireProjectRole(user.id, task.projectId, ['owner', 'admin', 'editor']);
+    if (user) {
+      await MembershipService.requireProjectRole(user.id, task.projectId, [
+        "owner",
+        "admin",
+        "editor",
+      ]);
+    }
 
     await Task.update(taskId, { status: "processing" });
 
@@ -236,19 +261,34 @@ class WorkflowService {
    * @param {string} data.taskId - Original extraction task ID
    * @returns {Promise<Object>} New task for scenario generation
    */
-  async generateTestcases({ taskId, feedbackPrompt = '', selectedFlowNames = [], previousTaskId = '', user }) {
+  async generateTestcases(
+    {
+      taskId,
+      feedbackPrompt = "",
+      selectedFlowNames = [],
+      previousTaskId = "",
+      user,
+    },
+  ) {
     const sourceTask = await Task.findById(taskId);
     if (!sourceTask) {
       throw new Error("Source task not found");
     }
-    if (user) await MembershipService.requireProjectRole(user.id, sourceTask.projectId, ['owner', 'admin', 'editor']);
+    if (user) {
+      await MembershipService.requireProjectRole(
+        user.id,
+        sourceTask.projectId,
+        ["owner", "admin", "editor"],
+      );
+    }
 
     if (sourceTask.type !== "extract-flows") {
       throw new Error("Source task must be an extract-flows task");
     }
 
     // Input hash = hash of Agent 1's output (for staleness detection on Agent 3 side)
-    const inputHash = sourceTask.outputContentHash || contentHash(sourceTask.result?.flows || []);
+    const inputHash = sourceTask.outputContentHash ||
+      contentHash(sourceTask.result?.flows || []);
 
     const task = await Task.create({
       id: uuidv4(),
@@ -261,7 +301,14 @@ class WorkflowService {
     });
 
     // Trigger agent asynchronously
-    this._runAgent2Generation(task, sourceTask, feedbackPrompt, selectedFlowNames, previousTaskId, user?.id).catch((error) => {
+    this._runAgent2Generation(
+      task,
+      sourceTask,
+      feedbackPrompt,
+      selectedFlowNames,
+      previousTaskId,
+      user?.id,
+    ).catch((error) => {
       console.error("[WorkflowService] Agent 2 generation failed:", error);
     });
 
@@ -274,19 +321,35 @@ class WorkflowService {
    * @param {string} data.taskId - Testcase generation task ID
    * @returns {Promise<Object>} New task for automation generation
    */
-  async generateAutomation({ taskId, framework = "Mobile Auto Platform", feedbackPrompt = '', selectedScenarioIds = [], previousTaskId = '', user }) {
+  async generateAutomation(
+    {
+      taskId,
+      framework = "AIDLC Platform Auto Testcase Generator",
+      feedbackPrompt = "",
+      selectedScenarioIds = [],
+      previousTaskId = "",
+      user,
+    },
+  ) {
     const sourceTask = await Task.findById(taskId);
     if (!sourceTask) {
       throw new Error("Source task not found");
     }
-    if (user) await MembershipService.requireProjectRole(user.id, sourceTask.projectId, ['owner', 'admin', 'editor']);
+    if (user) {
+      await MembershipService.requireProjectRole(
+        user.id,
+        sourceTask.projectId,
+        ["owner", "admin", "editor"],
+      );
+    }
 
     if (sourceTask.type !== "generate-testcases") {
       throw new Error("Source task must be a generate-testcases task");
     }
 
     // Input hash = hash of Agent 2's output (for staleness detection)
-    const inputHash = sourceTask.outputContentHash || contentHash(sourceTask.result?.scenarios || []);
+    const inputHash = sourceTask.outputContentHash ||
+      contentHash(sourceTask.result?.scenarios || []);
 
     const task = await Task.create({
       id: uuidv4(),
@@ -299,7 +362,15 @@ class WorkflowService {
     });
 
     // Trigger agent asynchronously
-    this._runAgent3Automation(task, sourceTask, framework, feedbackPrompt, selectedScenarioIds, previousTaskId, user?.id).catch((error) => {
+    this._runAgent3Automation(
+      task,
+      sourceTask,
+      framework,
+      feedbackPrompt,
+      selectedScenarioIds,
+      previousTaskId,
+      user?.id,
+    ).catch((error) => {
       console.error("[WorkflowService] Agent 3 automation failed:", error);
     });
 
@@ -315,7 +386,12 @@ class WorkflowService {
     const task = await Task.findByIdWithDocument(taskId);
     if (!task) return null;
     if (user) {
-      await MembershipService.requireProjectRole(user.id, task.projectId, ['owner', 'admin', 'editor', 'viewer']);
+      await MembershipService.requireProjectRole(user.id, task.projectId, [
+        "owner",
+        "admin",
+        "editor",
+        "viewer",
+      ]);
     }
 
     const artifacts = await AgentArtifact.findByTaskId(taskId);
@@ -328,12 +404,22 @@ class WorkflowService {
 
   async getTaskPartialTestcases(taskId, offset = 0, user) {
     const task = await Task.findById(taskId);
-    if (!task) throw new ApiError(404, 'Task not found');
+    if (!task) throw new ApiError(404, "Task not found");
     if (user) {
-      await MembershipService.requireProjectRole(user.id, task.projectId, ['owner', 'admin', 'editor', 'viewer']);
+      await MembershipService.requireProjectRole(user.id, task.projectId, [
+        "owner",
+        "admin",
+        "editor",
+        "viewer",
+      ]);
     }
-    const artifactType = task.type === 'generate-automation' ? 'yaml' : 'scenario';
-    const allArtifacts = await AgentArtifact.findByTaskIdAndType(taskId, artifactType);
+    const artifactType = task.type === "generate-automation"
+      ? "yaml"
+      : "scenario";
+    const allArtifacts = await AgentArtifact.findByTaskIdAndType(
+      taskId,
+      artifactType,
+    );
     const partialArtifacts = allArtifacts.slice(offset);
     return {
       artifacts: partialArtifacts,
@@ -348,8 +434,14 @@ class WorkflowService {
    */
   async deleteTask(taskId, user) {
     const task = await Task.findById(taskId);
-    if (!task) throw new Error('Task not found');
-    if (user) await MembershipService.requireProjectRole(user.id, task.projectId, ['owner', 'admin', 'editor']);
+    if (!task) throw new Error("Task not found");
+    if (user) {
+      await MembershipService.requireProjectRole(user.id, task.projectId, [
+        "owner",
+        "admin",
+        "editor",
+      ]);
+    }
 
     await AgentArtifact.deleteByTaskId(taskId);
     await Task.deleteById(taskId);
@@ -368,8 +460,10 @@ class WorkflowService {
     const enrichedFilters = { ...filters };
 
     if (filters.user) {
-      const sub = await QuotaService.getOrProvisionSubscription(filters.user.id);
-      const { Plan } = require('../models');
+      const sub = await QuotaService.getOrProvisionSubscription(
+        filters.user.id,
+      );
+      const { Plan } = require("../models");
       const plan = await Plan.findById(sub.planId);
       if (plan?.taskHistoryDays) {
         const since = new Date();
@@ -380,16 +474,27 @@ class WorkflowService {
 
     if (!enrichedFilters.user) return Task.list(enrichedFilters);
     if (enrichedFilters.projectId) {
-      await MembershipService.requireProjectRole(enrichedFilters.user.id, enrichedFilters.projectId, ['owner', 'admin', 'editor', 'viewer']);
+      await MembershipService.requireProjectRole(
+        enrichedFilters.user.id,
+        enrichedFilters.projectId,
+        ["owner", "admin", "editor", "viewer"],
+      );
       return Task.list(enrichedFilters);
     }
 
-    const projectIds = await MembershipService.listAccessibleProjectIds(enrichedFilters.user.id);
+    const projectIds = await MembershipService.listAccessibleProjectIds(
+      enrichedFilters.user.id,
+    );
     const rows = (await Promise.all(
-      projectIds.map((projectId) => Task.list({ ...enrichedFilters, projectId })),
+      projectIds.map((projectId) =>
+        Task.list({ ...enrichedFilters, projectId })
+      ),
     )).flat();
     return rows
-      .sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime())
+      .sort((a, b) =>
+        new Date(b.updatedAt || b.createdAt).getTime() -
+        new Date(a.updatedAt || a.createdAt).getTime()
+      )
       .slice(0, enrichedFilters.limit || 50);
   }
 
@@ -401,12 +506,22 @@ class WorkflowService {
    */
   async getLatestCompletedTask(documentId, type, user) {
     const document = await Document.findById(documentId);
-    if (!document) throw new ApiError(404, 'Document not found');
+    if (!document) throw new ApiError(404, "Document not found");
     if (user) {
-      await MembershipService.requireProjectRole(user.id, document.projectId, ['owner', 'admin', 'editor', 'viewer']);
+      await MembershipService.requireProjectRole(user.id, document.projectId, [
+        "owner",
+        "admin",
+        "editor",
+        "viewer",
+      ]);
     }
     // First try committed, fall back to any completed (legacy rows have no version_status)
-    const committed = await Task.findLatestByProject(document.projectId, type, "completed", "committed");
+    const committed = await Task.findLatestByProject(
+      document.projectId,
+      type,
+      "completed",
+      "committed",
+    );
     if (committed) return committed;
     return Task.findLatestByProject(document.projectId, type, "completed");
   }
@@ -418,12 +533,22 @@ class WorkflowService {
    */
   async commitTask(taskId, user) {
     const task = await Task.findById(taskId);
-    if (!task) throw new ApiError(404, 'Task not found');
-    if (user) await MembershipService.requireProjectRole(user.id, task.projectId, ['owner', 'admin', 'editor']);
-    if (task.status !== 'completed') throw new ApiError(400, 'Only completed tasks can be committed');
-    if (task.versionStatus === 'committed') return task; // idempotent
+    if (!task) throw new ApiError(404, "Task not found");
+    if (user) {
+      await MembershipService.requireProjectRole(user.id, task.projectId, [
+        "owner",
+        "admin",
+        "editor",
+      ]);
+    }
+    if (task.status !== "completed") {
+      throw new ApiError(400, "Only completed tasks can be committed");
+    }
+    if (task.versionStatus === "committed") return task; // idempotent
     const updated = await Task.commitTask(taskId);
-    console.log(`[WorkflowService] Task committed: id=${taskId}, type=${task.type}`);
+    console.log(
+      `[WorkflowService] Task committed: id=${taskId}, type=${task.type}`,
+    );
     return updated;
   }
 
@@ -435,57 +560,76 @@ class WorkflowService {
    */
   async checkStaleness(projectId, user) {
     if (user) {
-      await MembershipService.requireProjectRole(user.id, projectId, ['owner', 'admin', 'editor', 'viewer']);
+      await MembershipService.requireProjectRole(user.id, projectId, [
+        "owner",
+        "admin",
+        "editor",
+        "viewer",
+      ]);
     }
 
     // Latest completed task per stage (any version_status — we need to compare hashes)
     const [agent1Latest, agent2Latest, agent3Latest] = await Promise.all([
-      Task.findLatestByProject(projectId, 'extract-flows', 'completed'),
-      Task.findLatestByProject(projectId, 'generate-testcases', 'completed'),
-      Task.findLatestByProject(projectId, 'generate-automation', 'completed'),
+      Task.findLatestByProject(projectId, "extract-flows", "completed"),
+      Task.findLatestByProject(projectId, "generate-testcases", "completed"),
+      Task.findLatestByProject(projectId, "generate-automation", "completed"),
     ]);
 
     // Latest COMMITTED task per stage (what downstream agents should use)
     const [agent1Committed, agent2Committed] = await Promise.all([
-      Task.findLatestByProject(projectId, 'extract-flows', 'completed', 'committed'),
-      Task.findLatestByProject(projectId, 'generate-testcases', 'completed', 'committed'),
+      Task.findLatestByProject(
+        projectId,
+        "extract-flows",
+        "completed",
+        "committed",
+      ),
+      Task.findLatestByProject(
+        projectId,
+        "generate-testcases",
+        "completed",
+        "committed",
+      ),
     ]);
 
     const result = {
-      agent1: agent1Latest ? {
-        taskId: agent1Latest.id,
-        versionStatus: agent1Latest.versionStatus,
-        outputContentHash: agent1Latest.outputContentHash,
-        isDraft: agent1Latest.versionStatus === 'draft',
-      } : null,
+      agent1: agent1Latest
+        ? {
+          taskId: agent1Latest.id,
+          versionStatus: agent1Latest.versionStatus,
+          outputContentHash: agent1Latest.outputContentHash,
+          isDraft: agent1Latest.versionStatus === "draft",
+        }
+        : null,
       agent2: null,
       agent3: null,
     };
 
     if (agent2Latest) {
       // Agent 2 is stale if its input_hash != active committed Agent 1's output_hash
-      const activeA1OutputHash = agent1Committed?.outputContentHash || agent1Latest?.outputContentHash;
+      const activeA1OutputHash = agent1Committed?.outputContentHash ||
+        agent1Latest?.outputContentHash;
       const isStale = !!(activeA1OutputHash && agent2Latest.inputContentHash &&
         agent2Latest.inputContentHash !== activeA1OutputHash);
       result.agent2 = {
         taskId: agent2Latest.id,
         versionStatus: agent2Latest.versionStatus,
         outputContentHash: agent2Latest.outputContentHash,
-        isDraft: agent2Latest.versionStatus === 'draft',
+        isDraft: agent2Latest.versionStatus === "draft",
         isStale,
         upstreamHash: activeA1OutputHash || null,
       };
     }
 
     if (agent3Latest) {
-      const activeA2OutputHash = agent2Committed?.outputContentHash || agent2Latest?.outputContentHash;
+      const activeA2OutputHash = agent2Committed?.outputContentHash ||
+        agent2Latest?.outputContentHash;
       const isStale = !!(activeA2OutputHash && agent3Latest.inputContentHash &&
         agent3Latest.inputContentHash !== activeA2OutputHash);
       result.agent3 = {
         taskId: agent3Latest.id,
         versionStatus: agent3Latest.versionStatus,
         outputContentHash: agent3Latest.outputContentHash,
-        isDraft: agent3Latest.versionStatus === 'draft',
+        isDraft: agent3Latest.versionStatus === "draft",
         isStale,
         upstreamHash: activeA2OutputHash || null,
       };
@@ -498,8 +642,12 @@ class WorkflowService {
    * Internal: Run Agent 1 extraction
    * @private
    */
-  async _runAgent1Extraction(task, documentIds, feedbackPrompt = '', userId = null) {
-
+  async _runAgent1Extraction(
+    task,
+    documentIds,
+    feedbackPrompt = "",
+    userId = null,
+  ) {
     // Download and concatenate all documents
     let rawText = "";
     try {
@@ -519,7 +667,9 @@ class WorkflowService {
       for (const res of results) {
         if (documentIds.length > 1) {
           // Add separator for multi-doc
-          rawText += `\n\n--- DOCUMENT ${res.index + 1}: ${res.document.fileName} ---\n\n${res.content}`;
+          rawText += `\n\n--- DOCUMENT ${
+            res.index + 1
+          }: ${res.document.fileName} ---\n\n${res.content}`;
         } else {
           rawText = res.content;
         }
@@ -535,7 +685,9 @@ class WorkflowService {
     await Task.update(task.id, { status: "processing" });
 
     console.log(
-      `[WorkflowService._runAgent1Extraction] raw_text length=${rawText.length}, preview:\n${rawText.slice(0, 500)}`,
+      `[WorkflowService._runAgent1Extraction] raw_text length=${rawText.length}, preview:\n${
+        rawText.slice(0, 500)
+      }`,
     );
 
     try {
@@ -626,8 +778,16 @@ class WorkflowService {
           );
 
           if (agentError) {
-            if (userId) QuotaService.recordFailedUsage({ userId, projectId: task.projectId, taskId: task.id, agentType: 'agent_1' }).catch(() => {});
-            completedData = completedData || { observability: errorObservability };
+            if (userId) {
+              QuotaService.recordFailedUsage({
+                userId,
+                projectId: task.projectId,
+                taskId: task.id,
+                agentType: "agent_1",
+              }).catch(() => {});
+            }
+            completedData = completedData ||
+              { observability: errorObservability };
             throw new Error(`Agent error: ${agentError}`);
           }
 
@@ -667,18 +827,20 @@ class WorkflowService {
             const rawMarkdown = completedData.raw_markdown || result;
             await AgentArtifact.bulkUpsert([
               ...flowArtifacts,
-              ...(rawMarkdown ? [{
-                id: uuidv4(),
-                taskId: task.id,
-                projectId: task.projectId,
-                agentType: "agent1",
-                artifactType: "raw_markdown",
-                artifactKey: "raw_markdown",
-                title: "Raw Markdown",
-                contentText: rawMarkdown,
-                ordinal: 999999,
-                contentHash: contentHash(rawMarkdown),
-              }] : []),
+              ...(rawMarkdown
+                ? [{
+                  id: uuidv4(),
+                  taskId: task.id,
+                  projectId: task.projectId,
+                  agentType: "agent1",
+                  artifactType: "raw_markdown",
+                  artifactKey: "raw_markdown",
+                  title: "Raw Markdown",
+                  contentText: rawMarkdown,
+                  ordinal: 999999,
+                  contentHash: contentHash(rawMarkdown),
+                }]
+                : []),
             ]);
             await Task.update(task.id, {
               result: {
@@ -692,8 +854,21 @@ class WorkflowService {
             });
             const t1In = completedData.token_usage?.input || 0;
             const t1Out = completedData.token_usage?.output || 0;
-            console.log(`[Agent1] token_usage — input: ${t1In}, output: ${t1Out}, total: ${t1In + t1Out} (task=${task.id})`);
-            if (userId) QuotaService.recordUsage({ userId, projectId: task.projectId, taskId: task.id, agentType: 'agent_1', tokenInput: t1In, tokenOutput: t1Out }).catch(() => {});
+            console.log(
+              `[Agent1] token_usage — input: ${t1In}, output: ${t1Out}, total: ${
+                t1In + t1Out
+              } (task=${task.id})`,
+            );
+            if (userId) {
+              QuotaService.recordUsage({
+                userId,
+                projectId: task.projectId,
+                taskId: task.id,
+                agentType: "agent_1",
+                tokenInput: t1In,
+                tokenOutput: t1Out,
+              }).catch(() => {});
+            }
           } else if (result && result.trim().length > 0) {
             // Fallback: use accumulated markdown
             console.log(
@@ -731,7 +906,10 @@ class WorkflowService {
           await Task.update(task.id, {
             error: `Failed to save agent response: ${parseError.message}`,
             status: "failed",
-            observability: observabilityFromFailure(completedData?.observability, parseError),
+            observability: observabilityFromFailure(
+              completedData?.observability,
+              parseError,
+            ),
           });
         }
       });
@@ -756,10 +934,20 @@ class WorkflowService {
    * Internal: Run Agent 2 scenario generation
    * @private
    */
-  async _runAgent2Generation(task, sourceTask, feedbackPrompt = '', selectedFlowNames = [], previousTaskId = '', userId = null) {
+  async _runAgent2Generation(
+    task,
+    sourceTask,
+    feedbackPrompt = "",
+    selectedFlowNames = [],
+    previousTaskId = "",
+    userId = null,
+  ) {
     await Task.update(task.id, { status: "processing" });
 
-    const sourceFlowArtifacts = await AgentArtifact.findByTaskIdAndType(sourceTask.id, "flow");
+    const sourceFlowArtifacts = await AgentArtifact.findByTaskIdAndType(
+      sourceTask.id,
+      "flow",
+    );
     let flows = flowArtifactsToFlows(sourceFlowArtifacts).map((f) => ({
       name: f.flowName || f.name || "Unknown",
       source: f.source || "",
@@ -769,14 +957,18 @@ class WorkflowService {
 
     // Partial re-run: only process selected flows
     if (selectedFlowNames.length > 0) {
-      flows = flows.filter(f => selectedFlowNames.includes(f.name));
+      flows = flows.filter((f) => selectedFlowNames.includes(f.name));
     }
 
-    console.log(`[Agent2] Starting task=${task.id}, flows=${flows.length}/${sourceFlowArtifacts.length} (partial=${selectedFlowNames.length > 0}), feedbackPrompt="${feedbackPrompt}"`);
+    console.log(
+      `[Agent2] Starting task=${task.id}, flows=${flows.length}/${sourceFlowArtifacts.length} (partial=${
+        selectedFlowNames.length > 0
+      }), feedbackPrompt="${feedbackPrompt}"`,
+    );
     flows.forEach((f, i) =>
       console.log(
         `[Agent2]   flow[${i}]: "${f.name}" (${f.steps.length} steps)`,
-      ),
+      )
     );
 
     try {
@@ -836,12 +1028,16 @@ class WorkflowService {
                 if (currentEvent === "progress") {
                   // Log meaningful progress messages (not raw tokens)
                   const msg = data.status || data.step || data.log || "";
-                  if (msg && !data.token)
+                  if (msg && !data.token) {
                     console.log(`[Agent2] progress: ${msg}`);
+                  }
                   if (data.token) result += data.token;
                   // Partial save: persist scenarios for each completed flow immediately
                   if (data.new_scenarios?.length > 0) {
-                    const partialArtifacts = data.new_scenarios.map((s, index) => ({
+                    const partialArtifacts = data.new_scenarios.map((
+                      s,
+                      index,
+                    ) => ({
                       id: uuidv4(),
                       taskId: task.id,
                       projectId: task.projectId,
@@ -856,19 +1052,23 @@ class WorkflowService {
                     AgentArtifact.bulkUpsert(partialArtifacts)
                       .then((saved) =>
                         console.log(
-                          `[Agent2] Partial save: upserted ${saved.length} scenario artifact(s) (flow="${data.new_scenarios[0]?.flow_name}")`,
-                        ),
+                          `[Agent2] Partial save: upserted ${saved.length} scenario artifact(s) (flow="${
+                            data.new_scenarios[0]?.flow_name
+                          }")`,
+                        )
                       )
                       .catch((err) =>
                         console.warn(
                           "[Agent2] Partial save failed:",
                           err.message,
-                        ),
+                        )
                       );
                   }
                 } else if (currentEvent === "completed") {
                   console.log(
-                    `[Agent2] completed — scenarios=${data.scenarios?.length ?? 0}, feature="${data.feature_name}"`,
+                    `[Agent2] completed — scenarios=${
+                      data.scenarios?.length ?? 0
+                    }, feature="${data.feature_name}"`,
                   );
                   completedData = data;
                 }
@@ -888,8 +1088,16 @@ class WorkflowService {
         );
         try {
           if (agentError) {
-            if (userId) QuotaService.recordFailedUsage({ userId, projectId: task.projectId, taskId: task.id, agentType: 'agent_2' }).catch(() => {});
-            completedData = completedData || { observability: errorObservability };
+            if (userId) {
+              QuotaService.recordFailedUsage({
+                userId,
+                projectId: task.projectId,
+                taskId: task.id,
+                agentType: "agent_2",
+              }).catch(() => {});
+            }
+            completedData = completedData ||
+              { observability: errorObservability };
             throw new Error(`Agent error: ${agentError}`);
           }
           if (!completedData && (!result || result.trim().length === 0)) {
@@ -897,8 +1105,7 @@ class WorkflowService {
           }
 
           const finalScenarios = completedData?.scenarios || [];
-          const featureName =
-            completedData?.feature_name ||
+          const featureName = completedData?.feature_name ||
             sourceTask.result?.feature_name ||
             "Unknown";
           const markdown = completedData?.markdown || result;
@@ -924,19 +1131,28 @@ class WorkflowService {
               contentHash: contentHash(scenario),
             }));
             await AgentArtifact.bulkUpsert(scenarioArtifacts);
-            console.log(`[Agent2] Upserted ${scenarioArtifacts.length} scenario artifact(s) for task=${task.id}`);
+            console.log(
+              `[Agent2] Upserted ${scenarioArtifacts.length} scenario artifact(s) for task=${task.id}`,
+            );
           } else {
             console.warn(
-              `[Agent2] No scenarios returned — task=${task.id}, completedData keys: ${Object.keys(completedData || {}).join(", ")}`,
+              `[Agent2] No scenarios returned — task=${task.id}, completedData keys: ${
+                Object.keys(completedData || {}).join(", ")
+              }`,
             );
           }
 
           // Partial re-run: copy kept flows from previous task
           if (previousTaskId && selectedFlowNames.length > 0) {
-            const prevArtifacts = await AgentArtifact.findByTaskIdAndType(previousTaskId, "scenario");
+            const prevArtifacts = await AgentArtifact.findByTaskIdAndType(
+              previousTaskId,
+              "scenario",
+            );
             const kept = prevArtifacts.filter((artifact) => {
               const scenario = artifact.contentJson || {};
-              return !selectedFlowNames.includes(scenario.flow_name || scenario.name || artifact.title || "");
+              return !selectedFlowNames.includes(
+                scenario.flow_name || scenario.name || artifact.title || "",
+              );
             });
             if (kept.length > 0) {
               const toCreate = kept.map((artifact, index) => ({
@@ -953,12 +1169,19 @@ class WorkflowService {
                 contentHash: artifact.contentHash,
               }));
               await AgentArtifact.bulkUpsert(toCreate);
-              console.log(`[Agent2] Merged ${kept.length} kept scenario artifact(s) from previousTask=${previousTaskId}`);
+              console.log(
+                `[Agent2] Merged ${kept.length} kept scenario artifact(s) from previousTask=${previousTaskId}`,
+              );
             }
           }
 
-          const savedArtifacts = await AgentArtifact.findByTaskIdAndType(task.id, "scenario");
-          const outputHash = contentHash(savedArtifacts.map((artifact) => artifact.contentJson));
+          const savedArtifacts = await AgentArtifact.findByTaskIdAndType(
+            task.id,
+            "scenario",
+          );
+          const outputHash = contentHash(
+            savedArtifacts.map((artifact) => artifact.contentJson),
+          );
           // Mark completed AFTER testcases are persisted
           await Task.update(task.id, {
             result: {
@@ -973,8 +1196,21 @@ class WorkflowService {
           });
           const t2In = completedData?.token_usage?.input || 0;
           const t2Out = completedData?.token_usage?.output || 0;
-          console.log(`[Agent2] token_usage — input: ${t2In}, output: ${t2Out}, total: ${t2In + t2Out} (task=${task.id})`);
-          if (userId) QuotaService.recordUsage({ userId, projectId: task.projectId, taskId: task.id, agentType: 'agent_2', tokenInput: t2In, tokenOutput: t2Out }).catch(() => {});
+          console.log(
+            `[Agent2] token_usage — input: ${t2In}, output: ${t2Out}, total: ${
+              t2In + t2Out
+            } (task=${task.id})`,
+          );
+          if (userId) {
+            QuotaService.recordUsage({
+              userId,
+              projectId: task.projectId,
+              taskId: task.id,
+              agentType: "agent_2",
+              tokenInput: t2In,
+              tokenOutput: t2Out,
+            }).catch(() => {});
+          }
         } catch (parseError) {
           console.error(
             `[Agent2] Save error for task=${task.id}:`,
@@ -983,7 +1219,10 @@ class WorkflowService {
           await Task.update(task.id, {
             error: `Failed to save agent response: ${parseError.message}`,
             status: "failed",
-            observability: observabilityFromFailure(completedData?.observability, parseError),
+            observability: observabilityFromFailure(
+              completedData?.observability,
+              parseError,
+            ),
           });
         }
       });
@@ -1012,22 +1251,39 @@ class WorkflowService {
    * Internal: Run Agent 3 automation code generation
    * @private
    */
-  async _runAgent3Automation(task, sourceTask, framework = "Mobile Auto Platform", feedbackPrompt = '', selectedScenarioIds = [], previousTaskId = '', userId = null) {
+  async _runAgent3Automation(
+    task,
+    sourceTask,
+    framework = "AIDLC Auto Platform",
+    feedbackPrompt = "",
+    selectedScenarioIds = [],
+    previousTaskId = "",
+    userId = null,
+  ) {
     await Task.update(task.id, { status: "processing" });
 
-    const sourceScenarioArtifacts = await AgentArtifact.findByTaskIdAndType(sourceTask.id, "scenario");
+    const sourceScenarioArtifacts = await AgentArtifact.findByTaskIdAndType(
+      sourceTask.id,
+      "scenario",
+    );
     let scenarios = sourceScenarioArtifacts
       .filter((artifact) => artifact.contentJson)
       .map((artifact) => normalizeScenarioForAgent3(artifact.contentJson));
 
     // Partial re-run: only process selected scenarios
     if (selectedScenarioIds.length > 0) {
-      scenarios = scenarios.filter(s => selectedScenarioIds.includes(String(s.id)));
+      scenarios = scenarios.filter((s) =>
+        selectedScenarioIds.includes(String(s.id))
+      );
     }
 
     const featureName = sourceTask.result?.feature_name || "Unknown";
 
-    console.log(`[Agent3] Starting task=${task.id}, scenarios=${scenarios.length}/${sourceScenarioArtifacts.length} (partial=${selectedScenarioIds.length > 0}), framework=${framework}`);
+    console.log(
+      `[Agent3] Starting task=${task.id}, scenarios=${scenarios.length}/${sourceScenarioArtifacts.length} (partial=${
+        selectedScenarioIds.length > 0
+      }), framework=${framework}`,
+    );
 
     try {
       const response = await AgentService.runAgent({
@@ -1063,7 +1319,9 @@ class WorkflowService {
           if (line.startsWith("event: ")) {
             currentEvent = line.slice(7).trim();
             if (currentEvent !== "progress") {
-              console.log(`[Agent3] SSE event="${currentEvent}" (chunk #${chunkCount})`);
+              console.log(
+                `[Agent3] SSE event="${currentEvent}" (chunk #${chunkCount})`,
+              );
             }
           } else if (line.startsWith("data: ") && currentEvent) {
             if (currentEvent === "error") {
@@ -1097,11 +1355,26 @@ class WorkflowService {
                       contentHash: contentHash(f.content || ""),
                     }));
                     AgentArtifact.bulkUpsert(partialYamls)
-                      .then((saved) => console.log(`[Agent3] Partial save: upserted ${saved.length} YAML artifact(s) (${data.new_files[0]?.filename})`))
-                      .catch((err) => console.warn("[Agent3] Partial save failed:", err.message));
+                      .then((saved) =>
+                        console.log(
+                          `[Agent3] Partial save: upserted ${saved.length} YAML artifact(s) (${
+                            data.new_files[0]?.filename
+                          })`,
+                        )
+                      )
+                      .catch((err) =>
+                        console.warn(
+                          "[Agent3] Partial save failed:",
+                          err.message,
+                        )
+                      );
                   }
                 } else if (currentEvent === "completed") {
-                  console.log(`[Agent3] completed — yaml_files=${data.yaml_files?.length ?? 0}`);
+                  console.log(
+                    `[Agent3] completed — yaml_files=${
+                      data.yaml_files?.length ?? 0
+                    }`,
+                  );
                   completedData = data;
                 }
               } catch (_) {}
@@ -1113,17 +1386,29 @@ class WorkflowService {
       });
 
       response.data.on("end", async () => {
-        console.log(`[Agent3] Stream ended — chunks=${chunkCount}, agentError=${agentError}, hasCompleted=${!!completedData}`);
+        console.log(
+          `[Agent3] Stream ended — chunks=${chunkCount}, agentError=${agentError}, hasCompleted=${!!completedData}`,
+        );
         try {
           if (agentError) {
-            if (userId) QuotaService.recordFailedUsage({ userId, projectId: task.projectId, taskId: task.id, agentType: 'agent_3' }).catch(() => {});
-            completedData = completedData || { observability: errorObservability };
+            if (userId) {
+              QuotaService.recordFailedUsage({
+                userId,
+                projectId: task.projectId,
+                taskId: task.id,
+                agentType: "agent_3",
+              }).catch(() => {});
+            }
+            completedData = completedData ||
+              { observability: errorObservability };
             throw new Error(`Agent error: ${agentError}`);
           }
           if (!completedData) throw new Error("Agent returned empty result");
 
           const yamlFiles = completedData.yaml_files || [];
-          console.log(`[Agent3] Saving ${yamlFiles.length} YAML files for task=${task.id}`);
+          console.log(
+            `[Agent3] Saving ${yamlFiles.length} YAML files for task=${task.id}`,
+          );
 
           if (yamlFiles.length > 0) {
             const yamlArtifacts = yamlFiles.map((f, index) => ({
@@ -1140,17 +1425,24 @@ class WorkflowService {
               contentHash: contentHash(f.content || ""),
             }));
             await AgentArtifact.bulkUpsert(yamlArtifacts);
-            console.log(`[Agent3] Upserted ${yamlArtifacts.length} YAML artifact(s) for task=${task.id}`);
+            console.log(
+              `[Agent3] Upserted ${yamlArtifacts.length} YAML artifact(s) for task=${task.id}`,
+            );
           } else {
             console.warn(`[Agent3] No YAML files returned for task=${task.id}`);
           }
 
           // Partial re-run: copy kept scenarios' YAMLs from previous task
           if (previousTaskId && selectedScenarioIds.length > 0) {
-            const prevYamls = await AgentArtifact.findByTaskIdAndType(previousTaskId, "yaml");
+            const prevYamls = await AgentArtifact.findByTaskIdAndType(
+              previousTaskId,
+              "yaml",
+            );
             const kept = prevYamls.filter((artifact) => {
               const meta = artifact.contentJson || {};
-              const scenId = stripYamlExtension(meta.filename || artifact.title || artifact.artifactKey);
+              const scenId = stripYamlExtension(
+                meta.filename || artifact.title || artifact.artifactKey,
+              );
               return !selectedScenarioIds.includes(scenId);
             });
             if (kept.length > 0) {
@@ -1169,11 +1461,16 @@ class WorkflowService {
                 contentHash: artifact.contentHash,
               }));
               await AgentArtifact.bulkUpsert(toCreate);
-              console.log(`[Agent3] Merged ${kept.length} kept YAML artifact(s) from previousTask=${previousTaskId}`);
+              console.log(
+                `[Agent3] Merged ${kept.length} kept YAML artifact(s) from previousTask=${previousTaskId}`,
+              );
             }
           }
 
-          const savedArtifacts = await AgentArtifact.findByTaskIdAndType(task.id, "yaml");
+          const savedArtifacts = await AgentArtifact.findByTaskIdAndType(
+            task.id,
+            "yaml",
+          );
           const outputHash = contentHash(savedArtifacts.map((artifact) => ({
             filename: artifact.contentJson?.filename || artifact.title,
             content: artifact.contentText,
@@ -1192,28 +1489,61 @@ class WorkflowService {
           });
           const t3In = completedData.token_usage?.input || 0;
           const t3Out = completedData.token_usage?.output || 0;
-          console.log(`[Agent3] token_usage — input: ${t3In}, output: ${t3Out}, total: ${t3In + t3Out} (task=${task.id})`);
-          console.log(`[Agent3] billing userId=${userId ?? 'NULL — skipping quota'}`);
-          if (userId) QuotaService.recordUsage({ userId, projectId: task.projectId, taskId: task.id, agentType: 'agent_3', tokenInput: t3In, tokenOutput: t3Out }).catch((err) => console.error('[Agent3] recordUsage error:', err.message));
+          console.log(
+            `[Agent3] token_usage — input: ${t3In}, output: ${t3Out}, total: ${
+              t3In + t3Out
+            } (task=${task.id})`,
+          );
+          console.log(
+            `[Agent3] billing userId=${userId ?? "NULL — skipping quota"}`,
+          );
+          if (userId) {
+            QuotaService.recordUsage({
+              userId,
+              projectId: task.projectId,
+              taskId: task.id,
+              agentType: "agent_3",
+              tokenInput: t3In,
+              tokenOutput: t3Out,
+            }).catch((err) =>
+              console.error("[Agent3] recordUsage error:", err.message)
+            );
+          }
         } catch (err) {
-          console.error(`[Agent3] Save error for task=${task.id}:`, err.message);
+          console.error(
+            `[Agent3] Save error for task=${task.id}:`,
+            err.message,
+          );
           await Task.update(task.id, {
             error: `Failed to save agent response: ${err.message}`,
             status: "failed",
-            observability: observabilityFromFailure(completedData?.observability, err),
+            observability: observabilityFromFailure(
+              completedData?.observability,
+              err,
+            ),
           });
         }
       });
 
       response.data.on("error", async (error) => {
-        console.error(`[Agent3] Stream error for task=${task.id}:`, error.message);
-        await Task.update(task.id, { status: "failed", error: `Stream error: ${error.message}`, observability: observabilityFromFailure(null, error) });
+        console.error(
+          `[Agent3] Stream error for task=${task.id}:`,
+          error.message,
+        );
+        await Task.update(task.id, {
+          status: "failed",
+          error: `Stream error: ${error.message}`,
+          observability: observabilityFromFailure(null, error),
+        });
       });
     } catch (error) {
-      await Task.update(task.id, { status: "failed", error: error.message, observability: observabilityFromFailure(null, error) });
+      await Task.update(task.id, {
+        status: "failed",
+        error: error.message,
+        observability: observabilityFromFailure(null, error),
+      });
     }
   }
-
 }
 
 module.exports = new WorkflowService();

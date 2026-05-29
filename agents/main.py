@@ -64,7 +64,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Mobile Auto Testcase — AI Agents",
+    title="AIDLC Platform — AI Agents",
     description="LangGraph-based AI agent service for testcase generation",
     version="1.0.0",
     lifespan=lifespan,
@@ -89,6 +89,7 @@ app.add_middleware(
 # =============================================================================
 # Helper: dispatch to the right agent
 # =============================================================================
+
 
 def _first_context_value(context: dict, key: str, default=None):
     value = context.get(key, default)
@@ -148,7 +149,9 @@ def _project_context_from_context(context: dict) -> ProjectContext:
 
 def _user_stories_from_context(context: dict) -> list[UserStory]:
     stories = _list_context(context, "user_stories")
-    return [UserStory(**story) if isinstance(story, dict) else story for story in stories]
+    return [
+        UserStory(**story) if isinstance(story, dict) else story for story in stories
+    ]
 
 
 def _parse_agent_input(node_target: str, context: dict):
@@ -213,19 +216,27 @@ async def _run_agent(node_target: str, input_data, trace_context=None):
     if node_target == "po_agent":
         from src.agents.po_agent import run_po_agent
 
-        return await run_po_agent(input_data, model_config=model_config, trace_context=trace_context)
+        return await run_po_agent(
+            input_data, model_config=model_config, trace_context=trace_context
+        )
     if node_target == "ux_agent":
         from src.agents.ux_agent import run_ux_agent
 
-        return await run_ux_agent(input_data, model_config=model_config, trace_context=trace_context)
+        return await run_ux_agent(
+            input_data, model_config=model_config, trace_context=trace_context
+        )
     if node_target == "dev_agent":
         from src.agents.dev_agent import run_dev_agent
 
-        return await run_dev_agent(input_data, model_config=model_config, trace_context=trace_context)
+        return await run_dev_agent(
+            input_data, model_config=model_config, trace_context=trace_context
+        )
     if node_target == "qa_agent":
         from src.agents.qa_agent import run_qa_agent
 
-        return await run_qa_agent(input_data, model_config=model_config, trace_context=trace_context)
+        return await run_qa_agent(
+            input_data, model_config=model_config, trace_context=trace_context
+        )
     raise ValueError(f"Unknown node_target: {node_target}")
 
 

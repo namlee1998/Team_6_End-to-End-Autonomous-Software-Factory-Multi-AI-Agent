@@ -27,4 +27,10 @@ router.get('/workflow-status',                        SdlcController.getWorkflow
 router.get('/final-review-packet/:project_id',        SdlcController.getFinalReviewPacket.bind(SdlcController));
 router.get('/audit-trail/:project_id',                SdlcController.getAuditTrail.bind(SdlcController));
 
+// ── Backlog / Kanban ──────────────────────────────────────────────────────
+router.get('/projects/:project_id/backlog',           SdlcController.getBacklogs.bind(SdlcController));
+router.post('/projects/:project_id/backlog',          SdlcController.createBacklog.bind(SdlcController));
+router.patch('/backlog/:id/move',                     SdlcController.moveBacklog.bind(SdlcController));
+
+
 module.exports = router;

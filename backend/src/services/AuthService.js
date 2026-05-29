@@ -56,10 +56,10 @@ class AuthService {
       throw new ApiError(400, 'Email and password are required');
     }
 
-    if (email === 'admin@vfs.com' && password === 'admin123') {
+    if ((email === 'admin@vfs.com' && password === 'admin123') || (email === 'dev@aidlc.ai' && password === 'dev123')) {
       return {
         session: { access_token: 'mock-admin-token', refresh_token: 'mock-refresh' },
-        user: { id: '00000000-0000-0000-0000-000000000000', email: 'admin@vfs.com' },
+        user: { id: '00000000-0000-0000-0000-000000000000', email: email },
       };
     }
 
@@ -105,7 +105,7 @@ class AuthService {
     }
 
     if (accessToken === 'mock-admin-token') {
-      return { id: '00000000-0000-0000-0000-000000000000', email: 'admin@vfs.com' };
+      return { id: '00000000-0000-0000-0000-000000000000', email: 'dev@aidlc.ai' };
     }
 
     const { data: { user }, error } = await authClient.auth.getUser(accessToken);

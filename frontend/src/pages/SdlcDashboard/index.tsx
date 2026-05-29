@@ -11,6 +11,7 @@ import ArtifactViewer from './components/ArtifactViewer';
 import AuditTimeline from './components/AuditTimeline';
 import FeatureRequestForm from './components/FeatureRequestForm';
 import EmptyProjectState from './components/EmptyProjectState';
+import KanbanBoard from './components/KanbanBoard';
 
 
 const PHASES = [
@@ -35,6 +36,7 @@ export default function SdlcDashboard() {
   const [gateTaskId, setGateTaskId]     = useState<string | null>(null);
   const [sseAbort, setSseAbort]         = useState<AbortController | null>(null);
   const [panel, setPanel]               = useState<'artifacts' | 'audit'>('artifacts');
+  const [viewMode, setViewMode]         = useState<'kanban' | 'pipeline'>('kanban');
 
   useEffect(() => {
     if (currentProjectId && currentProjectId !== projectId) setProjectId(currentProjectId);
@@ -88,6 +90,7 @@ export default function SdlcDashboard() {
     if (!projectId) return;
     const res = await sdlcApi.runIntentAgent(projectId, fr);
     startSSE(res.task_id, 'intent');
+    setViewMode('pipeline');
   };
 
   const handleRunNext = async (phase: typeof PHASES[number]['key'], sourceTaskId: string, feedbackPrompt?: string) => {
@@ -123,17 +126,40 @@ export default function SdlcDashboard() {
         <EmptyProjectState />
       ) : (
         <>
-          {/* ── Architecture Pipeline (Stage Inspector) ────────────────── */}
-          <div className="sdlc-pipeline" style={{ paddingTop: '10px' }}>
-            <StageInspector
-              onRunIntent={() => setFeatureRequestFormOpen(true)}
-              onRunNext={handleRunNext as any}
-              onOpenGate={(taskId) => setGateTaskId(taskId)}
-              onViewArtifacts={handleViewArtifacts}
-              sseLogs={sseLogs}
-              activePhase={activePhase}
-              sseActive={sseActive}
-            />
+          <div className="flex bg-surface-container border-b border-outline-variant/30 px-6 py-2 gap-4 shrink-0">
+            <button
+              onClick={() => setViewMode('kanban')}
+              className={`px-4 py-1.5 rounded-lg text-sm font-bold flex items-center gap-2 transition-colors ${viewMode === 'kanban' ? 'bg-primary text-on-primary' : 'hover:bg-surface-container-high text-on-surface-variant'}`}
+            >
+              📋 Backlog Board
+            </button>
+            <button
+              onClick={() => setViewMode('pipeline')}
+              className={`px-4 py-1.5 rounded-lg text-sm font-bold flex items-center gap-2 transition-colors ${viewMode === 'pipeline' ? 'bg-primary text-on-primary' : 'hover:bg-surface-container-high text-on-surface-variant'}`}
+            >
+              ⚙️ Pipeline Inspector
+            </button>
+          </div>
+
+          <div className="flex-1 flex flex-col min-h-0 relative">
+            {viewMode === 'kanban' ? (
+              <div className="absolute inset-0 z-10 bg-background">
+                <KanbanBoard onRunIntent={handleRunIntent} />
+              </div>
+            ) : null}
+
+            {/* ── Architecture Pipeline (Stage Inspector) ────────────────── */}
+            <div className="sdlc-pipeline" style={{ paddingTop: '10px' }}>
+              <StageInspector
+                onRunIntent={() => setFeatureRequestFormOpen(true)}
+                onRunNext={handleRunNext as any}
+                onOpenGate={(taskId) => setGateTaskId(taskId)}
+                onViewArtifacts={handleViewArtifacts}
+                sseLogs={sseLogs}
+                activePhase={activePhase}
+                sseActive={sseActive}
+              />
+            </div>
           </div>
 
           {/* ── Bottom panel ─────────────────────────────────────────────── */}
@@ -167,9 +193,21 @@ export default function SdlcDashboard() {
       {/* ── Feature Request Modal ────────────────────────────────────── */}
       <AnimatePresence>
         {isFeatureRequestFormOpen && projectId && (
-          <motion.div className="sdlc-modal-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+          <motion.div className="sdlc-modal-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ zIndex: 100 }}>
             <motion.div className="sdlc-modal" initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}>
-              <FeatureRequestForm onSubmit={handleRunIntent} onCancel={() => setFeatureRequestFormOpen(false)} />
+              <FeatureRequestForm 
+                onSubmit={async (fr) => {
+                  setFeatureRequestFormOpen(false);
+                  try {
+                    await sdlcApi.createBacklog(projectId, fr);
+                    // Switch to kanban to see it
+                    setViewMode('kanban');
+                  } catch (e) {
+                    console.error('Failed to create backlog', e);
+                  }
+                }} 
+                onCancel={() => setFeatureRequestFormOpen(false)} 
+              />
             </motion.div>
           </motion.div>
         )}
