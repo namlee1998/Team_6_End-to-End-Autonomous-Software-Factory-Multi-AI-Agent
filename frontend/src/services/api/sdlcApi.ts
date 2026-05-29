@@ -60,6 +60,17 @@ export const getFinalReviewPacket = (projectId: string) =>
 export const getAuditTrail = (projectId: string) =>
   api.get(`${BASE}/audit-trail/${projectId}`).then((r) => r.data.data);
 
+// ── Backlog ───────────────────────────────────────────────────────────────
+
+export const getBacklogs = (projectId: string) =>
+  api.get(`${BASE}/projects/${projectId}/backlog`).then((r) => r.data.data);
+
+export const createBacklog = (projectId: string, payload: Partial<FeatureRequest>) =>
+  api.post(`${BASE}/projects/${projectId}/backlog`, payload).then((r) => r.data.data);
+
+export const moveBacklog = (backlogId: string, status: string) =>
+  api.patch(`${BASE}/backlog/${backlogId}/move`, { status }).then((r) => r.data.data);
+
 // ── SSE subscription (reuses same pattern as original API) ────────────────
 
 export const subscribeTaskSSE = (
