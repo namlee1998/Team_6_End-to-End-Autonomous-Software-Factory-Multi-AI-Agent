@@ -1,7 +1,7 @@
 {
   "name": "mobile-auto-testcase-generator-be",
   "version": "1.0.0",
-  "description": "Backend Gateway for Mobile Auto Testcase Generator",
+  "description": "Backend Gateway for AIDLC Auto Testcase Generator",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",

@@ -2,6 +2,25 @@
    AIDLC Control Platform — SDLC Dashboard Styles
    ========================================================================= */
 
+/* ── Scoped Reset — prevents Tailwind global from bleeding in ────────── */
+.sdlc-dashboard,
+.sdlc-dashboard *,
+.sdlc-dashboard *::before,
+.sdlc-dashboard *::after {
+  box-sizing: border-box;
+  border-color: transparent;
+}
+
+.sdlc-dashboard button,
+.sdlc-dashboard input,
+.sdlc-dashboard textarea,
+.sdlc-dashboard select {
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  color: inherit;
+}
+
 /* ── Dashboard Layout ────────────────────────────────────────────────────── */
 .sdlc-dashboard {
   display: flex;
@@ -17,10 +36,17 @@
     radial-gradient(at 50% 100%, rgba(16, 185, 129, 0.1) 0px, transparent 50%);
   color: #e2e8f0;
   font-family: 'Inter', system-ui, sans-serif;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-h1, h2, h3, .sdlc-title, .phase-card__label, .artifact-item__title {
+.sdlc-dashboard h1, .sdlc-dashboard h2, .sdlc-dashboard h3,
+.sdlc-dashboard .sdlc-title, .sdlc-dashboard .phase-card__label,
+.sdlc-dashboard .artifact-item__title {
   font-family: 'Outfit', system-ui, sans-serif;
+  margin: 0;
+  line-height: 1.3;
 }
 
 /* ── Header ──────────────────────────────────────────────────────────────── */

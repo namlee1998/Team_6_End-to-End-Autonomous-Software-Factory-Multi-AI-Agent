@@ -17,11 +17,7 @@ from src.agents.intent_agent import run_intent_agent, stream_intent_agent
 from src.agents.ux_agent import run_ux_agent, stream_ux_agent
 from src.agents.dev_agent import run_dev_agent, stream_dev_agent
 from src.agents.qa_agent import run_qa_agent, stream_qa_agent
-from src.schemas import (
-    Agent1Input, Agent1Output,
-    Agent2Input, Agent2Output,
-    Agent3Input, Agent3Output,
-)
+
 from src.schemas.aidlc import (
     IntentAgentInput,
     POAgentInput, FeatureRequest, ProjectContext,
@@ -96,90 +92,6 @@ def determine_fix_target(feedback: str) -> str:
     # Default fallback for generic bugs
     if has_word(["bug", "blocker", "fail", "failed", "error", "issue"]): return "qa_agent"
     return "dev_agent" # Default to DEV for generic code fixes
-
-
-# =============================================================================
-# Node Functions
-# =============================================================================
-
-async def node_agent_1_extraction(state: PipelineState) -> dict:
-    """Run Agent 1: UX Flow Extraction."""
-    try:
-        ctx = state.get("context", {})
-        input_data = Agent1Input(
-            raw_text=ctx.get("raw_text", ""),
-            prompt_profile=ctx.get("prompt_profile", ""),
-            resolutions=[
-                {"id": r.get("id", r.get("unknown_text", "")), "answer": r.get("user_feedback", r.get("answer", ""))}
-                for r in ctx.get("resolutions", [])
-            ],
-            previous_result=None,
-        )
-        result = await run_agent_1(input_data)
-        return {"agent_1_result": result.model_dump(), "agent_1_error": None}
-    except Exception as e:
-        return {"agent_1_result": None, "agent_1_error": str(e)}
-
-
-async def node_agent_2_scenarios(state: PipelineState) -> dict:
-    """Run Agent 2: QA Scenario Generation."""
-    try:
-        ctx = state.get("context", {})
-        agent_1_data = state.get("agent_1_result")
-
-        # If context has flows directly, use them; otherwise get from agent_1_result
-        if ctx.get("flows"):
-            flows_data = ctx["flows"]
-            feature_name = ctx.get("feature_name", "Unknown")
-        elif agent_1_data:
-            flows_data = agent_1_data.get("flows", [])
-            feature_name = ctx.get("feature_name") or "Extracted Feature"
-        else:
-            raise ValueError("No flows available: run agent_1 first or provide flows in context")
-
-        # Build flows as proper objects for the agent
-        from src.schemas import UXFlow
-        typed_flows = [UXFlow(**f) if isinstance(f, dict) else f for f in flows_data]
-
-        input_data = Agent2Input(
-            feature_name=feature_name,
-            flows=typed_flows,
-        )
-        result = await run_agent_2(input_data)
-        return {"agent_2_result": result.model_dump(), "agent_2_error": None}
-    except Exception as e:
-        import traceback
-        return {"agent_2_result": None, "agent_2_error": f"{str(e)}\n{traceback.format_exc()}"}
-
-
-async def node_agent_3_automation(state: PipelineState) -> dict:
-    """Run Agent 3: Automation Code Generation."""
-    try:
-        ctx = state.get("context", {})
-        agent_2_data = state.get("agent_2_result")
-
-        if ctx.get("scenarios"):
-            scenarios_data = ctx["scenarios"]
-            feature_name = ctx.get("feature_name", "Unknown")
-        elif agent_2_data:
-            scenarios_data = agent_2_data.get("scenarios", [])
-            feature_name = agent_2_data.get("feature_name", "Unknown")
-        else:
-            raise ValueError("No scenarios available: run agent_2 first or provide scenarios in context")
-
-        from src.schemas import TestScenario
-        typed_scenarios = [TestScenario(**s) if isinstance(s, dict) else s for s in scenarios_data]
-
-        input_data = Agent3Input(
-            feature_name=feature_name,
-            scenarios=typed_scenarios,
-            ui_description=ctx.get("ui_description", ""),
-            framework=ctx.get("framework", "Mobile Auto Platform"),
-        )
-        result = await run_agent_3(input_data)
-        return {"agent_3_result": result.model_dump(), "agent_3_error": None}
-    except Exception as e:
-        return {"agent_3_result": None, "agent_3_error": str(e)}
 
 
 # =============================================================================

@@ -24,10 +24,10 @@ def _get_llm(model_config=None):
     if model_config is None:
         model_config = {}
         
-    model_name = model_config.get("model") or os.getenv("DEFAULT_MODEL", "gpt-4o-mini")
-    temp = model_config.get("temperature", 0.1)
+    model_name = model_config.get("model") or os.getenv("DEFAULT_MODEL", "deepseek-v4-pro")
+    temp = model_config.get("temperature", 0.0)
     max_tokens = model_config.get("max_tokens", 8192)
-    thinking = model_config.get("thinking", False)
+    thinking = model_config.get("thinking", True)
     
     kwargs = {
         "model": model_name,

@@ -228,7 +228,7 @@ Implement a fully functional Kanban board to manage feature backlogs within a pr
               <ChevronRight className="w-6 h-6 text-indigo-500/50" />
             </div>
 
-            <motion.div className="col-span-1" variants={fadeUp} initial="hidden" whileInView="visible" viewport={{ once: true, delay: 0.1 }}>
+            <motion.div className="col-span-1" variants={fadeUp} initial="hidden" whileInView="visible" viewport={{ once: true }} transition={{ delay: 0.1 }}>
               <PipelineStep
                 step="02. Product"
                 icon={ClipboardList}
@@ -243,7 +243,7 @@ Implement a fully functional Kanban board to manage feature backlogs within a pr
               <ChevronRight className="w-6 h-6 text-indigo-500/50" />
             </div>
 
-            <motion.div className="col-span-1" variants={fadeUp} initial="hidden" whileInView="visible" viewport={{ once: true, delay: 0.2 }}>
+            <motion.div className="col-span-1" variants={fadeUp} initial="hidden" whileInView="visible" viewport={{ once: true }} transition={{ delay: 0.2 }}>
               <PipelineStep
                 step="03. Design"
                 icon={PenTool}
@@ -258,7 +258,7 @@ Implement a fully functional Kanban board to manage feature backlogs within a pr
               <ChevronRight className="w-6 h-6 text-indigo-500/50" />
             </div>
 
-            <motion.div className="col-span-1" variants={fadeUp} initial="hidden" whileInView="visible" viewport={{ once: true, delay: 0.3 }}>
+            <motion.div className="col-span-1" variants={fadeUp} initial="hidden" whileInView="visible" viewport={{ once: true }} transition={{ delay: 0.3 }}>
               <PipelineStep
                 step="04. Dev"
                 icon={Terminal}
@@ -273,7 +273,7 @@ Implement a fully functional Kanban board to manage feature backlogs within a pr
               <ChevronRight className="w-6 h-6 text-indigo-500/50" />
             </div>
 
-            <motion.div className="col-span-1" variants={fadeUp} initial="hidden" whileInView="visible" viewport={{ once: true, delay: 0.4 }}>
+            <motion.div className="col-span-1" variants={fadeUp} initial="hidden" whileInView="visible" viewport={{ once: true }} transition={{ delay: 0.4 }}>
               <PipelineStep
                 step="05. QA"
                 icon={ShieldCheck}
@@ -288,7 +288,7 @@ Implement a fully functional Kanban board to manage feature backlogs within a pr
       </section>
 
       {/* ━━━━━━━━━━━━ CODE DEMO ━━━━━━━━━━━━ */}
-      <section className="relative z-10 py-24 px-6 max-w-7xl mx-auto">
+      <section className="hidden relative z-10 py-24 px-6 max-w-7xl mx-auto">
         <motion.div variants={fadeUp} initial="hidden" whileInView="visible" viewport={{ once: true }} className="text-center mb-16">
           <p className="text-sm font-bold text-violet-400 uppercase tracking-widest mb-3">Live Execution</p>
           <h2 className="text-4xl md:text-5xl font-black font-['Outfit'] text-white">Watch the Agents Work</h2>
